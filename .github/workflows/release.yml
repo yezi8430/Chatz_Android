@@ -1,0 +1,68 @@
+name: Release APK
+
+# 触发方式：push 一个 v1.7.3 这样的 tag，或在 Actions 页面手动点
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 装 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: 装 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle 缓存
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 构建 release（未签名）
+        run: ./gradlew assembleRelease
+
+      - name: 对齐 + 签名 + 校验
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          echo "找到产物: $APK"
+
+          TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
+          "$TOOLS/zipalign" -v -p 4 "$APK" "$RUNNER_TEMP/aligned.apk"
+          "$TOOLS/apksigner" sign \
+            --ks "$RUNNER_TEMP/upload.jks" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass pass:"$KEYSTORE_PASSWORD" \
+            --key-pass pass:"$KEY_PASSWORD" \
+            --out "$RUNNER_TEMP/Chatz-${GITHUB_REF_NAME}.apk" \
+            "$RUNNER_TEMP/aligned.apk"
+          "$TOOLS/apksigner" verify --print-certs "$RUNNER_TEMP/Chatz-${GITHUB_REF_NAME}.apk"
+
+          # 清掉临时密钥，别留在 runner 上
+          rm -f "$RUNNER_TEMP/upload.jks"
+
+      - name: 发 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ runner.temp }}/Chatz-${{ github.ref_name }}.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
