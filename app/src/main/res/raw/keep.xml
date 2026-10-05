@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@id/widget_root,@id/widget_list,@id/widget_empty,@id/widget_item_root,@id/item_background_image,@id/item_overlay,@id/tv_title,@id/tv_content,@id/tv_app_name" />

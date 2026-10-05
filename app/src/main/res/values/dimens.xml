@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 圆角尺寸 -->
+    <dimen name="radius_small">8dp</dimen>
+    <dimen name="radius_medium">16dp</dimen>
+    <dimen name="radius_large">28dp</dimen>
+
+    <!--  新增：卡片边框宽度（方案A用） -->
+    <dimen name="stroke_width_card">1.5dp</dimen>
+
+    <!-- 默认边距 -->
+    <dimen name="activity_horizontal_margin">16dp</dimen>
+    <dimen name="activity_vertical_margin">16dp</dimen>
+    
+    <dimen name="design_navigation_padding_top">0dp</dimen>
+    <dimen name="design_navigation_padding_bottom">0dp</dimen>
+</resources>

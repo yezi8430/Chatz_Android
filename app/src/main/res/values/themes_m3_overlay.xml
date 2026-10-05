@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ============================================================
+         YeGotify · M3 改造补充主题（改造 1：图片预览对话框）
+         ============================================================ -->
+
+    <!--  M3 全屏/Alert 对话框主题 Overlay：套用 Material3 的 shape & 颜色角色，
+         供 AppCompatDialog / MaterialAlertDialogBuilder 使用 -->
+    <style name="ThemeOverlay.Yezigotify.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <!-- 对话框圆角（M3 标准组件圆角） -->
+        <item name="alertDialogStyle">@style/MaterialAlertDialog.Yezigotify</item>
+        <!-- 背景透明：我们的预览框是自定义全屏 scrim + 卡片，不走默认对话框背景 -->
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <!-- 让对话框内容可延伸至系统栏（全屏预览规范） -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+
+    <style name="MaterialAlertDialog.Yezigotify" parent="MaterialAlertDialog.Material3">
+        <item name="shapeAppearance">?attr/shapeAppearanceMediumComponent</item>
+    </style>
+
+
+
+    <!--  M3 标准 Elevation 层级（dimens 中引用，与 Material 设计规范一致） -->
+    <dimen name="elevation_0">0dp</dimen>
+    <dimen name="elevation_1">1dp</dimen>
+    <dimen name="elevation_2">3dp</dimen>
+    <dimen name="elevation_3">6dp</dimen>
+    <dimen name="elevation_4">8dp</dimen>
+    <dimen name="elevation_5">12dp</dimen>
+
+</resources>

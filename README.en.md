@@ -97,9 +97,19 @@ No location, contacts, or call-log permissions.
 - Server addresses and credentials are encrypted with AES‑256‑GCM, key held in the Android Keystore (non-exportable); `allowBackup` is off so nothing lands in cloud backups
 - See [PRIVACY.md](PRIVACY.md) for details
 
-## Source
+## Building from source
 
-This repo currently holds documentation and release artifacts only — **the source is not public yet**. Build instructions will be added here once it is.
+```bash
+git clone https://github.com/yezi8430/Chatz_Android.git
+cd Chatz_Android
+./gradlew assembleRelease
+```
+
+Output: `app/build/outputs/apk/release/`.
+
+- JDK 21 and a recent Android Studio are enough
+- `settings.gradle.kts` lists the Aliyun mirror ahead of `google()` / `mavenCentral()` for faster builds in mainland China; move the official repos first if you build elsewhere
+- See [RELEASE.md](RELEASE.md) for signing and publishing
 
 ## Stack
 

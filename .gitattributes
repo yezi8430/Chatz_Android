@@ -1,0 +1,18 @@
+# 换行符规范
+
+# gradlew 必须是 LF，否则在 Linux CI（GitHub Actions）上会报
+# /bin/sh^M: bad interpreter
+gradlew text eol=lf
+
+# Windows 批处理必须 CRLF（Android Studio 本地构建走的就是它）
+*.bat text eol=crlf
+
+# 二进制文件不要做任何换行转换
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.apk binary
+*.aab binary
+*.jks binary
+*.keystore binary

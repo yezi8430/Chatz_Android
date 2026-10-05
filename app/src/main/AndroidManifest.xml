@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:tools="http://schemas.android.com/tools"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"
+        tools:ignore="ForegroundServicesPolicy" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 开机自启权限 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- allowBackup 必须为 false：
+         服务器地址与 Token（含 Chatz 管理员 Token）、ntfy 用户名密码都存在
+         SharedPreferences 文件 "gotify.xml" 里且为明文。allowBackup=true 会让
+         该文件进入 Android 自动备份/云备份，拿到备份即等于拿到账号凭据。 -->
+    <application
+        android:name=".GotifyApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Chatz"
+        android:theme="@style/Theme.Yezigotify"
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="33"
+        tools:ignore="MissingClass">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="uiMode"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Yezigotify.Splash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".DndSettingsActivity"
+            android:label="勿扰模式设置"
+            android:exported="false" />
+
+        <service
+            android:name=".GotifyService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false" />
+
+        <!-- 开机自启 Receiver
+              新增 directBootAware + LOCKED_BOOT_COMPLETED：
+                - directBootAware=true 让 Receiver 在设备刚启动（未解锁）时也能被调起
+                - LOCKED_BOOT_COMPLETED 是解锁前发出的广播
+                - Receiver 里会判断 isUserUnlocked，未解锁则跳过
+                - 用户解锁后系统会再发 BOOT_COMPLETED，那时正常启动 -->
+        <receiver
+            android:name=".BootCompletedReceiver"
+            android:exported="false"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 通知「回复」动作的接收器
+             必须在这里登记：广播由**我们自己的 PendingIntent** 投递，
+             所以 exported=false 就够（投递身份来自那个 PendingIntent，
+             不需要对外暴露；不登记的话回复提交后广播无处可去，什么都不会发生） -->
+        <receiver
+            android:name=".ReplyReceiver"
+            android:exported="false" />
+
+        <!-- 桌面小组件 -->
+        <receiver
+            android:name=".ui.widget.RecentMessagesWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="asia.guojuice.yezigotify.WIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recent_messages_widget_info" />
+        </receiver>
+
+        <!-- 小组件的 RemoteViewsService -->
+        <service
+            android:name=".ui.widget.WidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+
+    </application>
+
+</manifest>

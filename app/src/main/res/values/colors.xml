@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ============================================================
+         YeGotify · Material 3 颜色角色（浅色 / Light）
+         ============================================================ -->
+
+    <!-- ===== 品牌主色（seed #4CAF50）===== -->
+    <color name="primary">#4CAF50</color>
+    <color name="on_primary">#FFFFFF</color>
+
+    <!-- ===== M3 核心角色（浅色，由 seed 派生）===== -->
+    <color name="primary_container">#C8E6C9</color>
+    <color name="on_primary_container">#002110</color>
+    <color name="secondary">#81C784</color>
+    <color name="on_secondary">#002110</color>
+    <color name="secondary_container">#B9F6CA</color>
+    <color name="on_secondary_container">#002110</color>
+    <color name="tertiary">#4DB6AC</color>
+    <color name="on_tertiary">#FFFFFF</color>
+    <color name="error">#B3261E</color>
+    <color name="on_error">#FFFFFF</color>
+    <color name="error_container">#F9DEDC</color>
+    <color name="on_error_container">#410E0B</color>
+    <color name="scrim">#52000000</color>
+    <!-- ===== 表面与背景 ===== -->
+    <color name="surface">#F9FBF7</color>
+    <color name="on_surface">#171D1A</color>
+    <color name="surface_variant">#E0E4E0</color>
+    <color name="on_surface_variant">#424940</color>
+    <color name="outline">#79797A</color>
+    <color name="outline_variant">#C9C9CA</color>
+    <color name="background">#F9FBF7</color>
+    <color name="on_background">#171D1A</color>
+    <color name="inverse_surface">#2B322D</color>
+    <color name="inverse_on_surface">#EFF1EE</color>
+    <!-- ===== 导航分割线 ===== -->
+    <color name="nav_divider">#1F000000</color>
+    <!-- ===== 兼容旧引用 ===== -->
+    <color name="primary_variant">@color/primary_container</color>
+    <color name="bg_page">@color/surface</color>
+    <color name="bg_card">@color/surface_variant</color>
+    <color name="bg_edittext">#F0F0F0</color>
+    <color name="text_primary">@color/on_surface</color>
+    <color name="text_secondary">@color/on_surface_variant</color>
+    <color name="divider">@color/outline_variant</color>
+    <color name="preview_bg">@color/primary_container</color>
+    <color name="search_view_bg">@color/surface_variant</color>
+
+    <!-- 桌面控件遮罩 -->
+    <color name="widget_overlay">#66FFFFFF</color>
+
+    <!-- 系统保留 -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

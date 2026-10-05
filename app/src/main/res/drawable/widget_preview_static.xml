@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="250dp"
+    android:height="110dp"
+    android:viewportWidth="250"
+    android:viewportHeight="110">
+
+    <!-- 深色背景 -->
+    <path
+        android:pathData="M0,0 h250 v110 h-250 z"
+        android:fillColor="#1F1F1F" />
+
+    <!-- 卡片 1 -->
+    <path
+        android:pathData="M4,4 h242 v34 h-242 z"
+        android:fillColor="#2E2E2E" />
+    <!-- App 名小条 -->
+    <path
+        android:pathData="M16,10 h30 v6 h-30 z"
+        android:fillColor="#666666" />
+    <!-- 标题条 -->
+    <path
+        android:pathData="M16,20 h80 v8 h-80 z"
+        android:fillColor="#CCCCCC" />
+    <!-- 内容条 -->
+    <path
+        android:pathData="M16,31 h180 v4 h-180 z"
+        android:fillColor="#999999" />
+
+    <!-- 卡片 2 -->
+    <path
+        android:pathData="M4,39 h242 v34 h-242 z"
+        android:fillColor="#2E2E2E" />
+    <path
+        android:pathData="M16,45 h30 v6 h-30 z"
+        android:fillColor="#666666" />
+    <path
+        android:pathData="M16,55 h80 v8 h-80 z"
+        android:fillColor="#CCCCCC" />
+    <path
+        android:pathData="M16,66 h180 v4 h-180 z"
+        android:fillColor="#999999" />
+
+    <!-- 卡片 3 -->
+    <path
+        android:pathData="M4,74 h242 v34 h-242 z"
+        android:fillColor="#2E2E2E" />
+    <path
+        android:pathData="M16,80 h30 v6 h-30 z"
+        android:fillColor="#666666" />
+    <path
+        android:pathData="M16,90 h80 v8 h-80 z"
+        android:fillColor="#CCCCCC" />
+    <path
+        android:pathData="M16,101 h180 v4 h-180 z"
+        android:fillColor="#999999" />
+
+</vector>

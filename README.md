@@ -97,9 +97,19 @@ Android 上的自托管消息推送客户端。一台 App 里可以同时挂载�
 - 服务器地址与凭据用 AES‑256‑GCM 加密后存本地，密钥放在 Android Keystore（不可导出），并已关闭 `allowBackup`，不会进入云备份
 - 权限与凭据的详细说明见 [PRIVACY.md](PRIVACY.md)
 
-## 源码
+## 从源码构建
 
-本仓库目前只包含文档与发布产物，**源码暂未公开**。开放后会在这里补上构建说明。
+```bash
+git clone https://github.com/yezi8430/Chatz_Android.git
+cd Chatz_Android
+./gradlew assembleRelease
+```
+
+产物在 `app/build/outputs/apk/release/`。
+
+- JDK 21 + Android Studio 最新版即可打开
+- `settings.gradle.kts` 里阿里云镜像排在 `google()` / `mavenCentral()` 前面，国内构建快；在境外构建可以把官方仓库调到前面
+- 发布签名流程见 [RELEASE.md](RELEASE.md)
 
 ## 技术栈
 
