@@ -1,5 +1,7 @@
 # Chatz
 
+[English](README.en.md) | 简体中文
+
 Android 上的自托管消息推送客户端。一台 App 里可以同时挂载多台服务器，同一套界面管理所有消息。
 
 支持的服务端：
@@ -55,7 +57,7 @@ Android 上的自托管消息推送客户端。一台 App 里可以同时挂载�
 
 ## 下载
 
-到 [Releases](../../releases) 页面下载最新的 `app-release.apk`，装完后在 App 里填你自己的服务器地址即可。
+到 [Releases](../../releases) 页面下载最新的 `Chatz-<版本号>.apk`，装完后在 App 里填你自己的服务器地址即可。
 
 - 包名：`asia.guojuice.yezigotify`
 - 最低系统要求：Android 7.0（API 24）及以上
@@ -95,19 +97,9 @@ Android 上的自托管消息推送客户端。一台 App 里可以同时挂载�
 - 服务器地址与凭据用 AES‑256‑GCM 加密后存本地，密钥放在 Android Keystore（不可导出），并已关闭 `allowBackup`，不会进入云备份
 - 权限与凭据的详细说明见 [PRIVACY.md](PRIVACY.md)
 
-## 从源码构建
+## 源码
 
-```bash
-git clone <本仓库地址>
-cd yezigotify
-./gradlew assembleRelease
-```
-
-产物在 `app/build/outputs/apk/release/`。
-
-- JDK 21、Android Studio 最新版即可打开
-- `settings.gradle.kts` 里仓库顺序是阿里云镜像在前、`google()` / `mavenCentral()` 在后，国内构建快；境外的机器可以把官方仓库调到前面
-- 发布签名流程见 [RELEASE.md](RELEASE.md)
+本仓库目前只包含文档与发布产物，**源码暂未公开**。开放后会在这里补上构建说明。
 
 ## 技术栈
 

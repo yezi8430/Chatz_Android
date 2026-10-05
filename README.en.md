@@ -1,5 +1,7 @@
 # Chatz
 
+English | [简体中文](README.md)
+
 An Android client for self-hosted message push. One app, several servers, one inbox.
 
 Supported backends:
@@ -55,7 +57,7 @@ Supported backends:
 
 ## Download
 
-Grab the latest `app-release.apk` from the [Releases](../../releases) page, install it, and enter your own server address.
+Grab the latest `Chatz-<version>.apk` from the [Releases](../../releases) page, install it, and enter your own server address.
 
 - Package: `asia.guojuice.yezigotify`
 - Requires Android 7.0 (API 24) or above
@@ -95,19 +97,9 @@ No location, contacts, or call-log permissions.
 - Server addresses and credentials are encrypted with AES‑256‑GCM, key held in the Android Keystore (non-exportable); `allowBackup` is off so nothing lands in cloud backups
 - See [PRIVACY.md](PRIVACY.md) for details
 
-## Building from source
+## Source
 
-```bash
-git clone <this repo>
-cd yezigotify
-./gradlew assembleRelease
-```
-
-Output: `app/build/outputs/apk/release/`.
-
-- JDK 21 and a recent Android Studio are enough
-- `settings.gradle.kts` lists the Aliyun mirror ahead of `google()` / `mavenCentral()` for faster builds in mainland China; move the official repos first if you build elsewhere
-- See [RELEASE.md](RELEASE.md) for signing and publishing
+This repo currently holds documentation and release artifacts only — **the source is not public yet**. Build instructions will be added here once it is.
 
 ## Stack
 
