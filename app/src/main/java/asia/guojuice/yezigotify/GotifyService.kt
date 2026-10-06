@@ -108,6 +108,9 @@ class GotifyService : Service() {
      */
     private var networkRestoreJob: Job? = null
 
+    /** 丢网后的主动复查任务（见 [NETWORK_LOST_RECHECK_DELAYS_MS]） */
+    private var networkRecheckJob: Job? = null
+
     companion object {
         const val BROADCAST_NEW_MESSAGE = "asia.guojuice.yezigotify.NEW_MESSAGE"
         const val ACTION_CLEAR_NOTIFICATIONS = "asia.guojuice.yezigotify.CLEAR_NOTIFICATIONS"
@@ -131,6 +134,17 @@ class GotifyService : Service() {
          * 所以这个值只在"VALIDATED 一直不来"时才真正生效。
          */
         const val NETWORK_RESTORE_FALLBACK_DELAY_MS = 1500L
+
+        /**
+         * 丢网之后「主动复查」的时间点（累计：2s / 5s / 12s / 27s）
+         *
+         * ⚠️ 为什么需要复查：`onLost` 之后系统**不保证**一定再派发 `onAvailable`
+         *    （飞行模式来回切、WiFi 其实一直没断的场景实测会漏）。漏了就没人再把
+         *    `isNetworkAvailable` 改回 true，它会永久停在 false —— 而这个值是
+         *    **所有重连入口的总闸**，一假就只剩 OkHttp 那 30s 的 ping 能救。
+         *    所以这里隔几秒直接问系统一次「现在到底有没有网」，有就走正常恢复。
+         */
+        val NETWORK_LOST_RECHECK_DELAYS_MS = longArrayOf(2000L, 3000L, 7000L, 15000L)
 
         /** 广播里携带来源服务器 id（多服务器后 UI 需要区分来源） */
         const val EXTRA_SERVER_ID = "server_id"
@@ -559,22 +573,34 @@ class GotifyService : Service() {
             override fun onLost(network: Network) {
                 isNetworkAvailable = false
                 manager.onNetworkLost()
+                // 回调不一定补得上（系统不保证再派发 onAvailable），排一次主动复查兜底
+                scheduleNetworkRecheck()
             }
 
             override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
                 val hasInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                val isValidated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
 
-                if (hasInternet && isValidated) {
-                    // VALIDATED = 系统已经拿这个网络做过强制门户探测、确认**真能上网**
-                    // ⇒ 路由肯定配好了，**不用再等**，立刻重连。
-                    //
-                    // 这一条就是把「几秒到十秒」砍下来的关键：原来所有人都要干等 1.5s，
-                    // 现在只有"VALIDATED 一直不来"的少数情况才需要兜底等待。
-                    onNetworkMaybeUp(delayMs = 0)
-                } else {
+                if (!hasInternet) {
+                    // 连 INTERNET 能力都没了 ⇒ 这个网络确实上不了网
                     isNetworkAvailable = false
+                    return
                 }
+
+                // ⚠️ 只要还有 INTERNET 能力就别判成「无网络」（2026-10-06 修）。
+                //
+                // 原写法要求 VALIDATED（系统的强制门户探测通过）才算有网，探测没过就置 false。
+                // 但 VALIDATED 在国内 / 企业内网 / 纯内网自托管场景**经常一直拿不到**
+                // —— 探测要访问 Google 的连通性检查地址，访问不到就永远不置位；
+                // 而开关飞行模式会让系统**重新走一遍探测**，这段时间里它必定是 false。
+                //
+                // 麻烦的是 isNetworkAvailable 是所有重连入口的**总闸**：指数退避、
+                // 心跳看门狗、WS 失败后要不要重排，全都先问它。它一假，就只剩
+                // OkHttp 那 30s 的 ping 能救 —— 正是「显示无网络 + 二三十秒才连上」。
+                //
+                // 能不能真连上服务器，交给连接层真连一次：连不上会走指数退避，不会失联。
+                // VALIDATED 仍然有用 —— 拿到了说明路由已就绪，不用等兜底那 1.5s。
+                val isValidated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                onNetworkMaybeUp(delayMs = if (isValidated) 0 else NETWORK_RESTORE_FALLBACK_DELAY_MS)
             }
         }
         connectivityManager?.registerNetworkCallback(request, networkCallback!!)
@@ -598,30 +624,82 @@ class GotifyService : Service() {
      *    `onNetworkRestored()`，等于每个回调都把指数退避（5s→10s→…→5min）取消掉重来，
      *    变成对挂掉的服务端狂轰。这两条限定把触发次数压到了"每次网络变化一次"。
      *
-     * ⚠️ 也别改成"看 state 决定"：`onLost` 万一没派发，`state` 会停在脏的 CONNECTED，
-     *    那时既触发不了恢复、也没法靠它判断。这种罕见情况交给 OkHttp 的
-     *    `pingInterval(30)`（发现半死连接）和 45s 心跳看门狗兜底。
+     * ⚠️ 触发之后还有一步：断过网（①）时先 `manager.onNetworkLost()` 再 `onNetworkRestored()`。
+     *    因为 `onLost` 万一没派发，每台连接的 `state` 会停在脏的 CONNECTED，
+     *    而 ServerConnection 里有「已连接就跳过重建」的守卫 ⇒ 直接恢复会被那道守卫挡掉。
+     *    先作废一次才能真重建 —— 飞行模式来回切留下的半死连接就是这么卡住的。
      */
     private fun onNetworkMaybeUp(delayMs: Long) {
         val wasAvailable = isNetworkAvailable
         // 「有没有网」这个值仍然维护着：通知文案要用它区分「无网络」和「连接失败」
         isNetworkAvailable = true
-
-        // 已经连着、或正在握手 ⇒ 什么都不用做
-        // （和 ServerConnection.onNetworkRestored 里那道守卫同一个口径）
-        if (currentState == ConnectionState.CONNECTED) return
+        networkRecheckJob?.cancel()
 
         // ② 把已有的兜底等待"提前"：只有当次是 VALIDATED 且确有任务在等，才允许
         val upgradePendingFallback = delayMs == 0L && networkRestoreJob?.isActive == true
         // ① 之外的重复回调一律忽略
         if (wasAvailable && !upgradePendingFallback) return
 
+        // 网络**一直都在**且已经连着 ⇒ 别白拆一次刚建好的连接
+        if (wasAvailable && currentState == ConnectionState.CONNECTED) {
+            networkRestoreJob?.cancel()
+            return
+        }
+
         networkRestoreJob?.cancel()
         networkRestoreJob = serviceScope.launch(Dispatchers.Main) {
             if (delayMs > 0) delay(delayMs)
+
+            // ⚠️ 断过网（wasAvailable == false）就**必须先作废旧连接**。
+            //
+            // 半死连接上 `state` 会停在 CONNECTED —— 对端（飞行模式 / NAT）已经没了，
+            // 本地 socket 还挂着，WS 收不到任何回调，状态就一直是「已连接」。
+            // 而 ServerConnection.onNetworkRestored 里有「state == CONNECTED 就跳过」的守卫
+            // （那是为了避免系统乱发回调时白拆连接），不清一下的话重连会被它整个挡掉，
+            // 只能等 OkHttp 30s 的 ping 才发现连接早就死了 —— 飞行模式来回切就是这么卡的。
+            //
+            // onNetworkLost() 干两件事：abandonConnection() 丢掉半死 socket +
+            // 把每台置成 DISCONNECTED，于是后面的 onNetworkRestored() 走的是正常重建路径。
+            if (!wasAvailable) manager.onNetworkLost()
+
             AppLog.d(tag, "网络恢复（等待 ${delayMs}ms 后）触发重连，state=$currentState")
             manager.onNetworkRestored()
         }
+    }
+
+    /**
+     * 丢网后主动复查：隔几秒直接问系统一次「现在有没有网」
+     *
+     * 存在原因是 `onLost` 之后系统**不保证**补发 `onAvailable` —— 飞行模式来回切、
+     * WiFi 实际没断的场景实测会漏。漏了就没人再把 `isNetworkAvailable` 改回 true，
+     * 而它是所有重连入口的总闸（退避 / 心跳看门狗 / WS 失败后是否重排，都先问它）。
+     * 不复查的话，唯一出路就是等 OkHttp 那 30s 的 ping。
+     */
+    private fun scheduleNetworkRecheck() {
+        networkRecheckJob?.cancel()
+        networkRecheckJob = serviceScope.launch(Dispatchers.IO) {
+            for (stepMs in NETWORK_LOST_RECHECK_DELAYS_MS) {
+                delay(stepMs)
+                // 期间回调来了 ⇒ 交给它处理，别重复触发
+                if (isNetworkAvailable) return@launch
+                if (isNetworkUpPerSystem()) {
+                    AppLog.d(tag, "丢网后复查：系统报告网络已恢复（回调没来），主动触发重连")
+                    onNetworkMaybeUp(delayMs = 0)
+                    return@launch
+                }
+            }
+            AppLog.d(tag, "丢网后复查结束：系统仍报告无网络，等回调或下次状态变化")
+        }
+    }
+
+    /** 直接问系统「现在有没有可用的上网通道」——不依赖回调，只看 INTERNET 能力 */
+    private fun isNetworkUpPerSystem(): Boolean {
+        val cm = connectivityManager
+            ?: runCatching { getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager }.getOrNull()
+            ?: return false
+        val net = cm.activeNetwork ?: return false
+        val caps = runCatching { cm.getNetworkCapabilities(net) }.getOrNull() ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     /**

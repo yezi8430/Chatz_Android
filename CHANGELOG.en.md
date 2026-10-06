@@ -2,6 +2,21 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions match `versionName` in `app/build.gradle.kts`.
 
+## [1.7.3] — 2026-10-06
+
+**Fixed**
+
+- Stuck on "no network" for 20-30 seconds after toggling airplane mode (with Wi-Fi staying on)
+  - "Is there a network" no longer depends on `NET_CAPABILITY_VALIDATED`. That flag is the
+    captive-portal probe result, which needs to reach Google's connectivity check endpoint —
+    often never set on mainland-China / LAN-only setups, and always false while the system
+    re-probes after an airplane-mode toggle
+  - When the network flips back from down to up, the old connection is discarded before
+    reconnecting (a half-dead socket keeps reporting "connected", which used to block the
+    rebuild and left only OkHttp's 30s ping to notice it)
+  - After a network loss the app now actively re-checks the system state (at 2/5/12/27s),
+    in case `onLost` arrived but the restore callback never did
+
 ## [1.7.2] — 2026-10-05
 
 First public release. Everything currently in the codebase:
