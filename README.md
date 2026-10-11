@@ -12,6 +12,18 @@ Android 上的自托管消息推送客户端。一台 App 里可以同时挂载�
 
 > 本客户端只做「接收与管理消息」，消息从哪来由你自己的服务器决定。不经过任何第三方中转服务。
 
+## 相关项目
+
+Chatz 由三个各自独立的仓库组成。**服务端是必须的**，客户端和插件按需取用：
+
+| 组件 | 仓库 | 许可 | 说明 |
+|---|---|---|---|
+| **服务端** | [yezi8430/Chatz](https://github.com/yezi8430/Chatz) | MIT | Node.js + SQLite，自带网页端；客户端连的就是它 |
+| **Android 客户端**（本仓库） | [yezi8430/Chatz_Android](https://github.com/yezi8430/Chatz_Android) | MIT | 原生 App；也兼容 Gotify / ntfy |
+| **Jellyfin 插件** | [yezi8430/jellyfin-plugin-chatz](https://github.com/yezi8430/jellyfin-plugin-chatz) | GPL-2.0 | 把 Jellyfin 的播放 / 媒体库事件推到 Chatz |
+
+> 插件单独用 GPL 是因为它引用了 Jellyfin 的 GPL 包，许可得跟着走。服务端与客户端都是 MIT。
+
 ## 特性
 
 **多服务器**

@@ -12,6 +12,18 @@ Supported backends:
 
 > The client only receives and manages messages. Where those messages come from is entirely up to your own server — nothing is relayed through a third-party service.
 
+## Related projects
+
+Chatz ships as three independent repositories. **The server is required**; the client and the plugin are optional:
+
+| Component | Repository | License | Notes |
+|---|---|---|---|
+| **Server** | [yezi8430/Chatz](https://github.com/yezi8430/Chatz) | MIT | Node.js + SQLite, web UI included — this is what the client connects to |
+| **Android client** (this repo) | [yezi8430/Chatz_Android](https://github.com/yezi8430/Chatz_Android) | MIT | Native app; also works with Gotify / ntfy |
+| **Jellyfin plugin** | [yezi8430/jellyfin-plugin-chatz](https://github.com/yezi8430/jellyfin-plugin-chatz) | GPL-2.0 | Pushes Jellyfin playback / library events into Chatz |
+
+> The plugin is GPL only because it references Jellyfin's GPL packages, so its license has to follow. Server and client are both MIT.
+
 ## Features
 
 **Multiple servers**
