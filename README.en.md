@@ -1,6 +1,6 @@
 # Chatz
 
-English | [简体中文](README.md)
+**English** | [简体中文](README.md)
 
 <p align="center"><img src="docs/logo.png" width="360" alt="Chatz"></p>
 
@@ -123,7 +123,7 @@ Output: `app/build/outputs/apk/release/`.
 
 - JDK 21 and a recent Android Studio are enough
 - `settings.gradle.kts` lists the Aliyun mirror ahead of `google()` / `mavenCentral()` for faster builds in mainland China; move the official repos first if you build elsewhere
-- See [RELEASE.md](RELEASE.md) for signing and publishing
+- See [docs/RELEASE.md](docs/RELEASE.md) for signing and publishing
 
 ## Stack
 

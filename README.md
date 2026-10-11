@@ -1,6 +1,6 @@
 # Chatz
 
-[English](README.en.md) | 简体中文
+**简体中文** | [English](README.en.md)
 
 <p align="center"><img src="docs/logo.png" width="360" alt="Chatz"></p>
 
@@ -123,7 +123,7 @@ cd Chatz_Android
 
 - JDK 21 + Android Studio 最新版即可打开
 - `settings.gradle.kts` 里阿里云镜像排在 `google()` / `mavenCentral()` 前面，国内构建快；在境外构建可以把官方仓库调到前面
-- 发布签名流程见 [RELEASE.md](RELEASE.md)
+- 发布签名流程见 [docs/RELEASE.md](docs/RELEASE.md)
 
 ## 技术栈
 
