@@ -2,6 +2,8 @@
 
 English | [简体中文](README.md)
 
+<p align="center"><img src="docs/logo.png" width="360" alt="Chatz"></p>
+
 An Android client for self-hosted message push. One app, several servers, one inbox.
 
 Supported backends:

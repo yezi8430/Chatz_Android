@@ -2,6 +2,8 @@
 
 [English](README.en.md) | 简体中文
 
+<p align="center"><img src="docs/logo.png" width="360" alt="Chatz"></p>
+
 Android 上的自托管消息推送客户端。一台 App 里可以同时挂载多台服务器，同一套界面管理所有消息。
 
 支持的服务端：
