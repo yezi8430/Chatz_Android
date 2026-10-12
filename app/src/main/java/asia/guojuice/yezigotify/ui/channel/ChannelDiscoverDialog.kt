@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -170,19 +171,28 @@ private fun ChannelDiscoverRow(
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 频道图标：有图用图，没图用首字母（与抽屉里的样式保持一致）
+        // 频道图标：有图按原图比例显示（不裁），没图用首字母圆形头像
         Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape),
+            modifier = Modifier.size(36.dp),
             contentAlignment = Alignment.Center
         ) {
             if (!channel.image.isNullOrBlank()) {
-                GlideIcon(url = channel.image, modifier = Modifier.fillMaxSize())
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    GlideIcon(
+                        url = channel.image,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {

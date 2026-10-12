@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -1013,7 +1012,7 @@ private fun AvatarPreview(url: String?, fallback: String, localPreview: ImageBit
     Box(
         modifier = Modifier
             .size(48.dp)
-            .clip(CircleShape)
+            .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
         contentAlignment = Alignment.Center
     ) {
@@ -1022,8 +1021,9 @@ private fun AvatarPreview(url: String?, fallback: String, localPreview: ImageBit
             Image(
                 bitmap = display,
                 contentDescription = null,
-                modifier = Modifier.size(48.dp).clip(CircleShape),
-                contentScale = ContentScale.Crop
+                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)),
+                // Fit：保留原图比例，不裁内容
+                contentScale = ContentScale.Fit
             )
         } else {
             Text(

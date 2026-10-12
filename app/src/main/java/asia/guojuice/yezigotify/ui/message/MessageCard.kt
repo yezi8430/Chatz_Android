@@ -895,10 +895,10 @@ private fun priorityDotBorder(priority: Int): Color {
 /**
  * 消息卡片左上角图标
  *
- * 形状规则：全部圆形
- *   - 频道：上传图标，没有图标时用频道名首字母
- *   - 应用：服务端图标，没有图标时用应用名首字母
- *   - ntfy（appid == 0）：图标来自消息 extras，没有时用默认图标
+ * 形状规则：
+ *   - **图片图标（频道上传图 / 应用图标 / ntfy extras）**：保留原图比例，
+ *     只加 6dp 圆角，`ContentScale.Fit` 不裁内容 —— 方图、长图、带字 logo 都不会被切掉
+ *   - **默认头像（首字母）和 ntfy 默认 logo**：仍然圆形，跟以前一致
  */
 @Composable
 private fun AppIconImage(
@@ -920,12 +920,12 @@ private fun AppIconImage(
 ) {
     val cacheVersion = AppIconCache.loadVersion.value
 
-    // ===== 1. 频道优先（圆形） =====
+    // ===== 1. 频道优先（图片保留原比例，默认头像仍是圆形） =====
     if (channel != null) {
         if (!channel.image.isNullOrBlank()) {
             AsyncIcon(
                 url = channel.image,
-                modifier = modifier.clip(CircleShape)
+                modifier = modifier.clip(RoundedCornerShape(6.dp))
             )
             return
         }
@@ -940,8 +940,8 @@ private fun AppIconImage(
         }
     }
 
-    // ===== 2. 应用图标 / ntfy（圆形，与频道一致） =====
-    val appIconModifier = modifier.clip(CircleShape)
+    // ===== 2. 应用图标 / ntfy（图片保留原比例；首字母头像仍是圆形） =====
+    val appIconModifier = modifier.clip(RoundedCornerShape(6.dp))
 
     // 优先消息自带的应用快照（隔离后本地缓存查不到别人的应用）；没有才回退本地缓存
     val snapshotIconUrl = remember(serverId, appSnapshot?.image, cacheVersion) {
@@ -1061,7 +1061,8 @@ private fun AsyncIcon(
             bitmap = bmp,
             contentDescription = null,
             modifier = modifier,
-            contentScale = ContentScale.Crop
+            // Fit：保留原图比例，不裁内容（以前是 Crop，方图/长图会被切掉一圈）
+            contentScale = ContentScale.Fit
         )
     }
 }

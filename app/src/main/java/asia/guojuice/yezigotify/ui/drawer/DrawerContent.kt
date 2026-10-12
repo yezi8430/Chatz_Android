@@ -282,7 +282,6 @@ fun DrawerContent(
                                             onLongClick = { onLongPressChannel(ch) },
                                             count = drawerCounts.byChannel[ch.id] ?: 0,
                                             highlightCount = drawerCounts.channelsWithUnread.contains(ch.id),
-                                            circleIcon = true,
                                             muted = ch.muted,
                                             iconContent = if (ch.image.isNullOrBlank()) {
                                                 { DrawerLetterAvatar(ch.name) }
@@ -304,14 +303,13 @@ fun DrawerContent(
                                         DrawerItem(
                                             text = app.name,
                                             iconUrl = app.iconUrl,
-                                            // 应用也走圆形；没有图标时用首字母头像（与频道一致）
+                                            // 有图就按原图比例显示（不裁）；没图时用首字母头像（与频道一致）
                                             // 图标列表还没加载完时同样落到首字母，不会出现空块
                                             fallbackIconRes = null,
                                             selected = currentFilterAppId == app.id,
                                             onClick = { onSelectFilter(app.id) },
                                             onLongClick = { onLongPressApp(app) },
                                             count = drawerCounts.byApp[app.id] ?: 0,
-                                            circleIcon = true,
                                             iconContent = if (app.iconUrl.isNullOrBlank()) {
                                                 { DrawerLetterAvatar(app.name) }
                                             } else null
@@ -547,7 +545,6 @@ private fun DrawerItem(
     onClick: () -> Unit,
     count: Int = 0,
     alwaysShowCount: Boolean = false,
-    circleIcon: Boolean = false,
     muted: Boolean = false,
     /** 徽标显示成淡红（用来标记"这个频道有未读"） */
     highlightCount: Boolean = false,
@@ -589,29 +586,20 @@ private fun DrawerItem(
             }
 
             iconUrl != null || fallbackIconRes != null -> {
-                val iconShape = if (circleIcon) CircleShape else RoundedCornerShape(6.dp)
-
+                // 图片图标：6dp 圆角 + Fit，保留原图比例不裁内容（以前按圆形 Crop 会切掉边角）
                 Box(
                     modifier = Modifier
                         .size(28.dp)
-                        .clip(iconShape),
+                        .clip(RoundedCornerShape(6.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     when {
                         iconUrl != null -> {
-                            if (circleIcon) {
-                                GlideIcon(
-                                    url = iconUrl,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                GlideIcon(
-                                    url = iconUrl,
-                                    modifier = Modifier.size(22.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
+                            GlideIcon(
+                                url = iconUrl,
+                                modifier = Modifier.size(22.dp),
+                                contentScale = ContentScale.Fit
+                            )
                         }
                         fallbackIconRes != null -> {
                             Image(
