@@ -856,6 +856,32 @@ internal object ImageBitmapCache {
     fun putImage(key: String, bitmap: androidx.compose.ui.graphics.ImageBitmap) {
         imageCache.put(key, bitmap)
     }
+
+    /**
+     * 把 Glide 交出来的 Bitmap 转成**可以长期持有**的 ImageBitmap
+     *
+     * ⚠️ `asImageBitmap()` 只是给 Bitmap 包一层引用，**不拷贝像素**。
+     *   Glide 的 Bitmap 来自 BitmapPool：请求被 clear / 资源被回收后，
+     *   同一个 Bitmap 对象会回到池里，被下一条加载**复用**（inBitmap）——
+     *   于是之前存进本缓存的那张「频道 A 的图标」，会在之后变成「频道 B 的图」。
+     *
+     * 表现：**图标串台**（Jellyfin 频道显示成 qBittorrent 的图标），
+     * 杀进程重开才恢复 —— 进程一死，BitmapPool 与本缓存一起清空。
+     *
+     * 这里拷一份像素，切断与 BitmapPool 的关联。图标/封面都很小，拷贝开销可忽略。
+     */
+    fun copyOf(src: android.graphics.Bitmap): androidx.compose.ui.graphics.ImageBitmap {
+        // 注意：不要显式判断 `Bitmap.Config.HARDWARE` —— 那个枚举常量是 API 26 才加的，
+        // minSdk 24 上引用会抛 NoSuchFieldError。HARDWARE 位图的 copy() 本身会抛异常，
+        // 交给下面的 catch 兜住即可。
+        return try {
+            src.copy(src.config ?: android.graphics.Bitmap.Config.ARGB_8888, false)
+                .asImageBitmap()
+        } catch (t: Throwable) {
+            AppLog.w("ImageBitmapCache", "位图拷贝失败，退回直接引用: ${t.message}")
+            src.asImageBitmap()
+        }
+    }
 }
 
 private fun priorityDotBorder(priority: Int): Color {
@@ -995,7 +1021,9 @@ private fun AsyncIcon(
                     resource: Bitmap,
                     transition: Transition<in Bitmap>?
                 ) {
-                    val ib = resource.asImageBitmap()
+                    // ⚠️ 必须拷贝：Glide 的 Bitmap 来自 BitmapPool，clear 后会被复用给别的图，
+                    //    直接 asImageBitmap() 存进缓存会导致图标串台（见 ImageBitmapCache.copyOf）
+                    val ib = ImageBitmapCache.copyOf(resource)
                     ImageBitmapCache.putIcon(url, ib)
                     if (cont.isActive) cont.resume(ib)
                 }
@@ -1075,7 +1103,8 @@ private fun AsyncImage(
                     val loaded = Glide.with(context).asBitmap().load(url).submit().get()
                     if (blurScale > 1) fastBlur(loaded, blurScale) else loaded
                 }
-                val imgBitmap = bmp.asImageBitmap()
+                // 同上：Glide 的 Bitmap 会被池复用，进缓存前必须拷一份
+                val imgBitmap = ImageBitmapCache.copyOf(bmp)
                 bitmap = imgBitmap
                 ImageBitmapCache.putImage(cacheKey, imgBitmap)
                 onLoaded()

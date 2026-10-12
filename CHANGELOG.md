@@ -2,6 +2,18 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号跟 `app/build.gradle.kts` 里的 `versionName`。
 
+## [1.7.5] — 2026-10-12
+
+**修复**
+
+- **图标串台**：缓存里的图标会变成别的应用/频道的图（例如 Jellyfin 频道显示成 qBittorrent 的图标），
+  且**杀掉进程重开才恢复正常**。
+  原因：Glide 交给我们的 Bitmap 来自它的 BitmapPool，而 `asImageBitmap()` 只是给 Bitmap
+  **包一层引用、不拷贝像素**；图标滑出屏幕、目标被 `Glide.clear()` 后，同一块内存会被
+  下一条加载**复用** —— 于是缓存里那张图的像素被改写成了后来加载的图。
+  现在所有位图进缓存前都先 `copy()` 一份，切断与 BitmapPool 的关联
+  （`ui/message` 的频道/应用图标与消息封面、`ui/drawer` 的抽屉图标、`ui/preview` 的大图预览）。
+
 ## [1.7.4] — 2026-10-12
 
 **新增**

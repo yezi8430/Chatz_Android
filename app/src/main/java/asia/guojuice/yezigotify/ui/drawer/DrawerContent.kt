@@ -787,7 +787,11 @@ internal fun GlideIcon(
                     resource: Bitmap,
                     transition: Transition<in Bitmap>?
                 ) {
-                    val ib = resource.asImageBitmap()
+                    // ⚠️ 必须拷贝：Glide 的 Bitmap 来自 BitmapPool，target 被 clear 后
+                    //    同一块内存会被复用给另一张图；直接 asImageBitmap() 存进
+                    //    ImageBitmapCache 会让图标串台（Jellyfin 显示成 qBittorrent）。
+                    //    详见 ImageBitmapCache.copyOf
+                    val ib = ImageBitmapCache.copyOf(resource)
                     ImageBitmapCache.putIcon(url, ib)
                     if (cont.isActive) cont.resume(ib)
                 }

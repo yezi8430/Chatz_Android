@@ -2,6 +2,21 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions match `versionName` in `app/build.gradle.kts`.
 
+## [1.7.5] — 2026-10-12
+
+**Fixed**
+
+- **Icons showing the wrong image**: a cached icon could turn into another app's or channel's
+  image (e.g. the Jellyfin channel showing qBittorrent's icon), and only **killing the app
+  process** restored it.
+  Cause: the bitmaps Glide hands us come from its BitmapPool, and `asImageBitmap()` only
+  **wraps the reference without copying pixels**; once an icon scrolled off screen and the
+  target was `Glide.clear()`ed, that same memory got **reused** by the next load — so the
+  pixels behind a cached image were overwritten by whatever loaded next.
+  All bitmaps are now `copy()`d before they are cached, cutting the link to the BitmapPool
+  (channel/app icons and message covers in `ui/message`, drawer icons in `ui/drawer`,
+  image preview in `ui/preview`).
+
 ## [1.7.4] — 2026-10-12
 
 **Added**

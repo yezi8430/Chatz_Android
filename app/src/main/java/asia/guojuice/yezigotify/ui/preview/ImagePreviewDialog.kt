@@ -189,7 +189,8 @@ fun ImagePreviewDialogContent(
             }
         }
 
-        val imgBitmap = rawBitmap?.asImageBitmap()
+        // 同上：Glide 的 Bitmap 出池后会被复用，进缓存前拷一份
+        val imgBitmap = rawBitmap?.let { ImageBitmapCache.copyOf(it) }
         bitmap = imgBitmap
 
         if (imgBitmap != null) {
