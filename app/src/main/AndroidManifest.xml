@@ -16,6 +16,17 @@
     <!-- 开机自启权限 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- 包可见性（Android 11+）：不声明的话查不到"装没装这个 App"，
+         DeepLinkOpener 就没法判断该不该把深链交给 Jellyfin。
+         ⚠️ 只影响查询 API；startActivity 打开浏览器不受包可见性限制。 -->
+    <queries>
+        <!-- Jellyfin Android TV：支持 ACTION_VIEW + data=itemId（直接定位到条目） -->
+        <package android:name="org.jellyfin.androidtv" />
+        <!-- Jellyfin 手机版：目前**不支持**深链（清单里没有 ACTION_VIEW），
+             声明它只是为了能探测到（日志/"以后支持了就能直接用"） -->
+        <package android:name="org.jellyfin.mobile" />
+    </queries>
+
     <!-- allowBackup 必须为 false：
          服务器地址与 Token（含 Chatz 管理员 Token）、ntfy 用户名密码都存在
          SharedPreferences 文件 "gotify.xml" 里且为明文。allowBackup=true 会让

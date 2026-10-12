@@ -22,6 +22,7 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.app.TaskStackBuilder
+import asia.guojuice.yezigotify.AppLog
 import asia.guojuice.yezigotify.capabilities.ServerCapabilitiesHolder
 import asia.guojuice.yezigotify.config.ServerConfig
 import asia.guojuice.yezigotify.config.ServerConfigStore
@@ -34,7 +35,9 @@ import asia.guojuice.yezigotify.ui.dnd.ChannelDndManager
 import asia.guojuice.yezigotify.ui.dnd.DoNotDisturbManager
 import asia.guojuice.yezigotify.ui.dnd.PerAppDndManager
 import asia.guojuice.yezigotify.ui.widget.RecentMessagesWidget
+import asia.guojuice.yezigotify.utils.MessageImage
 import asia.guojuice.yezigotify.utils.AppInfo
+import asia.guojuice.yezigotify.utils.DeepLinkOpener
 import asia.guojuice.yezigotify.utils.MessageSender
 import asia.guojuice.yezigotify.utils.MessageText
 import asia.guojuice.yezigotify.utils.ServerDisplay
@@ -571,10 +574,8 @@ class GotifyService : Service() {
             }
 
             override fun onLost(network: Network) {
-                isNetworkAvailable = false
+                markNetworkDown()
                 manager.onNetworkLost()
-                // 回调不一定补得上（系统不保证再派发 onAvailable），排一次主动复查兜底
-                scheduleNetworkRecheck()
             }
 
             override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
@@ -582,7 +583,7 @@ class GotifyService : Service() {
 
                 if (!hasInternet) {
                     // 连 INTERNET 能力都没了 ⇒ 这个网络确实上不了网
-                    isNetworkAvailable = false
+                    markNetworkDown()
                     return
                 }
 
@@ -665,6 +666,18 @@ class GotifyService : Service() {
             AppLog.d(tag, "网络恢复（等待 ${delayMs}ms 后）触发重连，state=$currentState")
             manager.onNetworkRestored()
         }
+    }
+
+    /**
+     * 置「无网络」并排一次主动复查
+     *
+     * 复查那一步不能省：不管是 `onLost` 还是「能力降级」，系统都**不保证**之后
+     * 一定再派发恢复回调（飞行模式来回切时实测会漏），漏了就没人把
+     * `isNetworkAvailable` 改回 true，而这个值是所有重连入口的总闸。
+     */
+    private fun markNetworkDown() {
+        isNetworkAvailable = false
+        scheduleNetworkRecheck()
     }
 
     /**
@@ -866,6 +879,34 @@ class GotifyService : Service() {
     }
 
     /**
+     * 通知上的「打开」按钮：一跳直达消息里带的深链（如 Jellyfin 的详情页）
+     *
+     * 用 PendingIntent.getActivity + ACTION_VIEW —— 点一下交系统处理（浏览器 / 能处理该
+     * 链接的应用），**不需要 App 在后台跑起来**，冷启动也快。
+     * ⚠️ requestCode 用 notificationIdFor(msg.id) + 1：内容是 +0、回复（广播）也是 +0，
+     *    这里必须错开，否则三条 PendingIntent 会互相覆盖（见 createNotificationPendingIntent 的说明）。
+     * ⚠️ 目标已被服务端标记删除（urlGone）时**不给按钮** —— 点了必然 404，不如不给。
+     */
+    private fun openDeepLinkAction(msg: GotifyMessage): NotificationCompat.Action? {
+        val link = MessageText.deepLinkFromExtras(msg.extras) ?: return null
+        if (link.gone) return null
+        return try {
+            // 和卡片上那个按钮同一条规则：能唤起 Jellyfin App（TV 端）就唤起，否则浏览器
+            val intent = DeepLinkOpener.intentFor(this, link.url)
+            val pi = PendingIntent.getActivity(
+                this,
+                notificationIdFor(msg.id) + 1,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            NotificationCompat.Action.Builder(0, link.label, pi).build()
+        } catch (e: Exception) {
+            AppLog.w("GotifyService", "深链按钮创建失败: ${e.message}")
+            null
+        }
+    }
+
+    /**
      * 通知上的「回复」动作
      *
      * 只给 Chatz 的**频道消息**加：
@@ -912,7 +953,9 @@ class GotifyService : Service() {
         config: AppDndConfig
     ) {
         val cleanText = cleanMessageText(msg.message)
-        val imageUrl = MessageText.imageUrl(msg.message, msg.extras)
+        // ⚠️ 补全域名：开启「缓存封面图」后 extras.image 是 `/attachments/cached-…`
+        //    相对路径，不补全的话通知大图直接没有（见 utils/MessageImage）
+        val imageUrl = MessageImage.resolve(this, msg.sourceServerId, MessageText.imageUrl(msg.message, msg.extras))
         val priority = msg.priority
 
         val customSoundUri = config.customSoundUri
@@ -948,6 +991,8 @@ class GotifyService : Service() {
 
         // 直接在通知里回复（只对 Chatz 频道消息有效）
         replyAction(msg)?.let { builder.addAction(it) }
+        // 「打开」：消息带深链时给一个直达按钮（Jellyfin 详情页等）
+        openDeepLinkAction(msg)?.let { builder.addAction(it) }
 
         if (silent) {
             builder.setVibrate(longArrayOf(0)).setSound(null).setDefaults(0)
@@ -1001,7 +1046,8 @@ class GotifyService : Service() {
         config: AppDndConfig
     ) {
         val cleanText = cleanMessageText(msg.message)
-        val imageUrl = MessageText.imageUrl(msg.message, msg.extras)
+        // 同上：相对路径（缓存封面）要按**这条消息所属服务器**补全域名
+        val imageUrl = MessageImage.resolve(this, server.id, MessageText.imageUrl(msg.message, msg.extras))
 
         // 分组粒度 = "一台服务器的一个 app"：多服务器后必须带 serverId，
         // 否则两台服务器上 appid 相同的消息会互相覆盖合并通知
@@ -1068,6 +1114,8 @@ class GotifyService : Service() {
 
         // 合并通知里回复的是**最新那条**消息所在的频道
         replyAction(msg)?.let { builder.addAction(it) }
+        // 「打开」同上（合并通知也用最新那条的深链）
+        openDeepLinkAction(msg)?.let { builder.addAction(it) }
 
         if (silent) {
             builder.setVibrate(longArrayOf(0)).setSound(null).setDefaults(0)

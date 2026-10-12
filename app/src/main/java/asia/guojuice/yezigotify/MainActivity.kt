@@ -51,6 +51,7 @@ import asia.guojuice.yezigotify.ui.dnd.DoNotDisturbManager
 import asia.guojuice.yezigotify.ui.drawer.DrawerApp
 import asia.guojuice.yezigotify.ui.drawer.DrawerServer
 import asia.guojuice.yezigotify.ui.main.MainScreen
+import asia.guojuice.yezigotify.utils.DeepLinkOpener
 import asia.guojuice.yezigotify.ui.preview.ImagePreviewDialogContent
 import asia.guojuice.yezigotify.ui.theme.YezigotifyTheme
 import asia.guojuice.yezigotify.utils.AppThemeState
@@ -300,13 +301,14 @@ class MainActivity : AppCompatActivity() {
                     isLongPressReadyState = isLongPressReadyState,
                     onImageClick = { url, bmp -> showComposeImagePreview(url, bmp) },
                     onUrlClick = { url ->
-                        try {
-                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        } catch (e: Exception) {
+                        // 深链（Jellyfin 详情页）：能唤起 Jellyfin App（TV 端支持）就走 App，
+                        // 否则回落浏览器 —— 判断在 DeepLinkOpener 里，见那边的说明
+                        DeepLinkOpener.openWithReason(this@MainActivity, url)?.let { reason ->
+                            // 把**具体原因**也带上：不然"打不开"这三个字没法排查（没法连电脑抓日志时尤其）
                             Toast.makeText(
                                 this@MainActivity,
-                                "无法打开链接",
-                                Toast.LENGTH_SHORT
+                                "无法打开链接：$reason",
+                                Toast.LENGTH_LONG
                             ).show()
                         }
                     },

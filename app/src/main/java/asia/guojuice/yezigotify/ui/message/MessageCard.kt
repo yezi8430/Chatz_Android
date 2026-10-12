@@ -4,10 +4,14 @@ import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.text.util.Linkify
 import android.widget.TextView
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -49,21 +53,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.ColorUtils
 import asia.guojuice.yezigotify.AppIconCache
+import asia.guojuice.yezigotify.AppLog
 import asia.guojuice.yezigotify.GotifyMessage
 import asia.guojuice.yezigotify.R
 import asia.guojuice.yezigotify.capabilities.ChatzAggChild
 import asia.guojuice.yezigotify.capabilities.ChatzChannel
 import asia.guojuice.yezigotify.utils.AppInfo
+import asia.guojuice.yezigotify.utils.MessageImage
 import asia.guojuice.yezigotify.utils.MessageSender
 import asia.guojuice.yezigotify.utils.MessageText
 import asia.guojuice.yezigotify.utils.SenderInfo
@@ -115,14 +123,34 @@ fun MessageCard(
     val themeColor = Color(themeColorInt)
     val isLight = ThemeColorManager.isLightColor(themeColorInt)
 
-    val imageUrl = remember(msg.id) { extractImageUrl(msg) }
+    // ⚠️ 必须补全域名：服务端开了「缓存封面图」之后 extras.image 是
+    //    `/attachments/cached-xxx.jpg` 这种相对路径（它不知道自己的对外域名），
+    //    直接喂给图片加载器会失败 —— 表现为安卓端封面整个不显示、置底样式也不生效
+    val imageContext = LocalContext.current
+    /** 原始取值（可能是不带域名的相对路径）—— 剥正文时用这个，正文里存的就是它 */
+    val rawImageUrl = remember(msg.id) { extractImageUrl(msg) }
+    /** 渲染用（绝对地址） */
+    val imageUrl = remember(msg.id, msg.sourceServerId) {
+        MessageImage.resolve(imageContext, msg.sourceServerId, rawImageUrl)
+    }
     val attachment = remember(msg.id) { extractAttachment(msg.extras) }
+    /** 深链（点一下直达对应页面，如 Jellyfin 详情页） */
+    val deepLink = remember(msg.id, msg.extras) { MessageText.deepLinkFromExtras(msg.extras) }
     val replyQuote = remember(msg.id) { extractReplyQuote(msg.extras) }
     val sender = remember(msg.id) { MessageSender.from(msg.extras) }
     // 应用快照（服务端写入 extras.app）：应用按用户隔离后，图标/名字不能再指望应用列表
     val appInfo = remember(msg.id) { AppInfo.from(msg.extras) }
 
     val useBackgroundImage = imageAsBackground && imageUrl != null
+
+    // 背景图**真的加载出来**才切成"置底"样式（黑底 + 半透明遮罩 + 白字）。
+    //
+    // ⚠️ 原来是 imageUrl 非空就切 —— 图片还在下载 / 下载失败时，整张卡就是**一片黑**
+    //    （用户实测：刚收到的消息一直黑着，要重开 App 才出图）。
+    //    现在加载中/失败一律用普通卡片（主题色），图到位后自动淡入切成置底样式。
+    //    另一个附带好处：老消息的外链封面 404 时也不会再黑卡。
+    var bgImageLoaded by remember(imageUrl) { mutableStateOf(false) }
+    val bgActive = useBackgroundImage && bgImageLoaded
 
     // ===== 已读/未读视觉 =====
     //
@@ -139,16 +167,23 @@ fun MessageCard(
     val isRead = msg.isRead
     val readDim = if (isRead) 0.78f else 1.0f
 
-    // 基础色（未应用"已读淡化"）
-    val baseTitleColor = if (useBackgroundImage) Color.White else {
-        if (isLight) Color.Black else Color.White
-    }
-    val baseBodyColor = if (useBackgroundImage) Color.White else {
-        if (isLight) Color.Black.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.85f)
-    }
-    val baseFooterColor = if (useBackgroundImage) Color.White.copy(alpha = 0.75f) else {
-        if (isLight) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.65f)
-    }
+    // 置底样式的切换也要**渐变**（不只是图片自己淡入）：
+    // 底色（主题色 → 黑）、遮罩（0 → 50%）、文字（普通色 → 白）全部由这一个 0→1 的
+    // 进度条插值驱动。只让图片淡入的话，卡片的底色/字色会在一帧里"啪"地翻转，
+    // 观感很突然（用户反馈："没有淡入啊？就突兀地从普通变成带卡片模糊的"）。
+    val bgProgress by animateFloatAsState(
+        targetValue = if (bgActive) 1f else 0f,
+        animationSpec = tween(durationMillis = 400),
+        label = "bgProgress"
+    )
+
+    // 基础色（未应用"已读淡化"）—— 两端取值 = 普通卡片色 / 置底卡片色，中间按进度插值
+    val plainTitleColor = if (isLight) Color.Black else Color.White
+    val plainBodyColor = if (isLight) Color.Black.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.85f)
+    val plainFooterColor = if (isLight) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.65f)
+    val baseTitleColor = lerp(plainTitleColor, Color.White, bgProgress)
+    val baseBodyColor = lerp(plainBodyColor, Color.White, bgProgress)
+    val baseFooterColor = lerp(plainFooterColor, Color.White.copy(alpha = 0.75f), bgProgress)
 
     // 应用"已读淡化"后的色
     val titleColor = baseTitleColor.copy(alpha = baseTitleColor.alpha * readDim)
@@ -157,24 +192,23 @@ fun MessageCard(
     val titleWeight = if (isRead) FontWeight.Normal else FontWeight.SemiBold
 
     // ===== 首字母头像配色 =====
-    val letterBgColor: Color = if (useBackgroundImage) {
-        Color(ColorUtils.blendARGB(
-            android.graphics.Color.BLACK,
-            android.graphics.Color.WHITE,
-            0.15f
-        ))
-    } else {
-        val mixTarget = if (isLight) {
-            android.graphics.Color.BLACK
-        } else {
-            android.graphics.Color.WHITE
-        }
-        Color(ColorUtils.blendARGB(themeColorInt, mixTarget, 0.15f))
-    }
+    val plainLetterBg = Color(ColorUtils.blendARGB(
+        themeColorInt,
+        if (isLight) android.graphics.Color.BLACK else android.graphics.Color.WHITE,
+        0.15f
+    ))
+    val bgLetterTint = Color(ColorUtils.blendARGB(
+        android.graphics.Color.BLACK,
+        android.graphics.Color.WHITE,
+        0.15f
+    ))
+    val letterBgColor: Color = lerp(plainLetterBg, bgLetterTint, bgProgress)
 
-    val letterTextColor = if (useBackgroundImage) Color.White else {
-        if (isLight) Color.Black else Color.White
-    }
+    val letterTextColor = lerp(
+        if (isLight) Color.Black else Color.White,
+        Color.White,
+        bgProgress
+    )
 
     val timeText by remember(msg.date) {
         derivedStateOf { formatTime(msg.date, nowMinuteState.value) }
@@ -195,7 +229,8 @@ fun MessageCard(
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (useBackgroundImage) Color.Black else themeColor)
+            // 底色也按进度插值（主题色 → 黑），跟文字/遮罩同步过渡
+            .background(lerp(themeColor, Color.Black, bgProgress))
             .combinedClickable(
                 onClick = handleClick,
                 onLongClick = { onLongPress() }
@@ -209,12 +244,15 @@ fun MessageCard(
                     if (isApi31Plus) Modifier.blur(12.dp) else Modifier
                 ),
                 contentScale = ContentScale.Crop,
-                blurScale = if (isApi31Plus) 0 else 8
+                blurScale = if (isApi31Plus) 0 else 8,
+                // 图真到位了才切成置底样式（见 bgActive 的说明）
+                onLoaded = { bgImageLoaded = true }
             )
+            // 遮罩的浓度跟着进度走（0 → 50%）—— 直接"有没有"会是硬切
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
+                    .background(Color.Black.copy(alpha = 0.5f * bgProgress))
             )
         }
 
@@ -270,8 +308,11 @@ fun MessageCard(
                 Spacer(Modifier.height(8.dp))
             }
 
-            val cleanText = remember(msg.id, imageUrl, attachment) {
-                val attachUrl = imageUrl ?: attachment?.url
+            val cleanText = remember(msg.id, rawImageUrl, attachment) {
+                // ⚠️ 用**原始取值**（rawImageUrl）而不是补全后的绝对地址：正文里存的就是原始那个
+                //    （缓存封面存的是 `/attachments/cached-…` 相对路径）。用绝对地址去剥会剥不掉，
+                //    结果就是图片在卡片上显示两遍。
+                val attachUrl = rawImageUrl ?: attachment?.url
                 if (attachUrl == null) {
                     MessageText.stripImageMarkdown(msg.message)
                 } else {
@@ -309,6 +350,12 @@ fun MessageCard(
                 )
             }
 
+            // ===== 深链：点一下直达对应页面（和 WebUI 的「在 Jellyfin 中打开」一致）=====
+            if (deepLink != null) {
+                Spacer(Modifier.height(8.dp))
+                DeepLinkChip(link = deepLink, color = bodyColor, onOpen = onUrlClick)
+            }
+
             // ===== 文件附件（非图片） =====
             // 图片不用这条：它走上面的 extras.image 链路，两份都渲染会重复
             if (attachment != null) {
@@ -331,7 +378,10 @@ fun MessageCard(
                     footerColor = footerColor,
                     nowMinuteState = nowMinuteState,
                     onImageClick = onImageClick,
-                    onToggleCollapse = onToggleCollapse
+                    onUrlClick = onUrlClick,
+                    onToggleCollapse = onToggleCollapse,
+                    // 子项要不要各自再画一遍封面：与主卡同图时省掉（见 AggregateBlock 里的判断）
+                    mainImageUrl = imageUrl
                 )
             }
 
@@ -535,10 +585,28 @@ private fun AggregateBlock(
     footerColor: Color,
     nowMinuteState: State<Long>,
     onImageClick: (String, Bitmap?) -> Unit,
-    onToggleCollapse: () -> Unit
+    /** 透传给子项的深链按钮（展开后每条各跳各的） */
+    onUrlClick: (String) -> Unit,
+    onToggleCollapse: () -> Unit,
+    /** 主卡当前的封面地址（已补全域名）；用来判断子项要不要重复画图 */
+    mainImageUrl: String? = null
 ) {
     var expanded by remember(msg.id) { mutableStateOf(false) }
     val children = msg.aggChildren.orEmpty()
+    val childImageContext = LocalContext.current
+
+    // 子项封面 == 主卡封面（**所有**子项都一样）时，子项不再重复渲染图片 ——
+    // 同一部剧的每一集共用一张剧海报，一列海报会把卡片拉得很长（用户反馈过）。
+    // 规则与 WebUI 一致（public/app.js 的 hideChildImg）：封面不一致时主卡本来就没图，
+    // 子项各显各的，信息不丢。
+    val hideChildImages = mainImageUrl != null && children.isNotEmpty() &&
+        children.all { child ->
+            MessageImage.resolve(
+                childImageContext,
+                msg.sourceServerId,
+                MessageText.imageUrlFromExtras(child.extras)
+            ) == mainImageUrl
+        }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -584,38 +652,60 @@ private fun AggregateBlock(
             )
         }
 
-        if (expanded) {
-            val ordered = children.asReversed()
-            if (ordered.isEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "没有可展开的子消息",
-                    color = footerColor,
-                    fontSize = 12.sp
-                )
-            } else {
-                ordered.forEachIndexed { idx, child ->
-                    if (idx == 0) {
-                        Spacer(Modifier.height(10.dp))
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .height(1.dp)
-                                .background(footerColor.copy(alpha = 0.15f))
+        // 展开/收起要**带动画**：原来直接 `if (expanded) { … }` 是一帧硬切，
+        // 卡片高度会"唰"地一下变短（用户反馈"高度一下子变短"）。
+        // 外层 MessageListScreen 的 onToggleCollapse 补偿是**逐帧轮询卡片底边**的，
+        // 本来就是为这种多帧高度动画写的，两者配合正好。
+        AnimatedVisibility(
+            visible = expanded,
+            // expandFrom/shrinkTowards 都用 Top：内容贴着"× N"那一行往下长/往上收，
+            // 是手风琴的手感；用默认的 Bottom 会像从底部推上来
+            enter = expandVertically(
+                animationSpec = tween(durationMillis = 220),
+                expandFrom = Alignment.Top
+            ),
+            exit = shrinkVertically(
+                animationSpec = tween(durationMillis = 200),
+                shrinkTowards = Alignment.Top
+            )
+        ) {
+            // 内层 Column：整段子项列表作为一个动画单元（高度 0 ↔ 实际高度）
+            Column(modifier = Modifier.fillMaxWidth()) {
+                val ordered = children.asReversed()
+                if (ordered.isEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "没有可展开的子消息",
+                        color = footerColor,
+                        fontSize = 12.sp
+                    )
+                } else {
+                    ordered.forEachIndexed { idx, child ->
+                        if (idx == 0) {
+                            Spacer(Modifier.height(10.dp))
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                                    .height(1.dp)
+                                    .background(footerColor.copy(alpha = 0.15f))
+                            )
+                        }
+                        AggregateChildItem(
+                            child = child,
+                            number = msg.aggCount - idx,
+                            parentTitle = msg.title,
+                            serverId = msg.sourceServerId,
+                            markwon = markwon,
+                            bodyColor = bodyColor,
+                            footerColor = footerColor,
+                            nowMinuteState = nowMinuteState,
+                            onImageClick = onImageClick,
+                            onUrlClick = onUrlClick,
+                            showImage = !hideChildImages
                         )
                     }
-                    AggregateChildItem(
-                        child = child,
-                        number = msg.aggCount - idx,
-                        parentTitle = msg.title,
-                        markwon = markwon,
-                        bodyColor = bodyColor,
-                        footerColor = footerColor,
-                        nowMinuteState = nowMinuteState,
-                        onImageClick = onImageClick
-                    )
                 }
             }
         }
@@ -630,13 +720,22 @@ private fun AggregateChildItem(
     child: ChatzAggChild,
     number: Int,
     parentTitle: String?,
+    /** 消息来源服务器 id：子项封面可能是相对路径（缓存封面），拼域名要用它 */
+    serverId: String,
     markwon: Markwon,
     bodyColor: Color,
     footerColor: Color,
     nowMinuteState: State<Long>,
-    onImageClick: (String, Bitmap?) -> Unit
+    onImageClick: (String, Bitmap?) -> Unit,
+    /** 点深链按钮（子项各自的「打开」）—— 走和主卡同一条 ACTION_VIEW 路径 */
+    onUrlClick: (String) -> Unit,
+    /** 是否渲染子项自己的封面图（与主卡同图时上层会关掉，避免卡片过长） */
+    showImage: Boolean = true
 ) {
-    val childImageUrl = remember(child) { MessageText.imageUrlFromExtras(child.extras) }
+    val context = LocalContext.current
+    val childImageUrl = remember(child, serverId) {
+        MessageImage.resolve(context, serverId, MessageText.imageUrlFromExtras(child.extras))
+    }
     val cleanText = remember(child) { MessageText.stripImageMarkdown(child.message) }
     // 聚合子消息各自也可能是不同的人发的，所以发送者也逐条显示
     val childSender = remember(child) { MessageSender.from(child.extras) }
@@ -695,7 +794,7 @@ private fun AggregateChildItem(
             )
         }
 
-        if (childImageUrl != null) {
+        if (showImage && childImageUrl != null) {
             Spacer(Modifier.height(6.dp))
             AsyncImage(
                 url = childImageUrl,
@@ -706,6 +805,13 @@ private fun AggregateChildItem(
                     .clickable { onImageClick(childImageUrl, null) },
                 contentScale = ContentScale.Crop
             )
+        }
+
+        // 子项各自的深链（和 WebUI 一样，展开后每条各跳各的）
+        val childDeepLink = remember(child) { MessageText.deepLinkFromExtras(child.extras) }
+        if (childDeepLink != null) {
+            Spacer(Modifier.height(6.dp))
+            DeepLinkChip(link = childDeepLink, color = bodyColor, onOpen = onUrlClick)
         }
     }
 }
@@ -939,7 +1045,9 @@ private fun AsyncImage(
     url: String,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
-    blurScale: Int = 0
+    blurScale: Int = 0,
+    /** 位图**真的可用**（缓存命中或下载完成）时回调 —— 置底样式靠它决定何时切换 */
+    onLoaded: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val cacheKey = if (blurScale > 0) "${url}_blur$blurScale" else url
@@ -955,18 +1063,29 @@ private fun AsyncImage(
     )
 
     LaunchedEffect(cacheKey) {
-        if (bitmap != null) return@LaunchedEffect
-        try {
-            val bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                val loaded = Glide.with(context).asBitmap().load(url).submit().get()
-                if (blurScale > 1) fastBlur(loaded, blurScale) else loaded
+        if (bitmap != null) { onLoaded(); return@LaunchedEffect }
+
+        // 失败**重试一次**（间隔 2 秒）：
+        // 刚收到的消息可能在图片还没就绪 / 网络刚切换 / 服务器刚好忙的时候去取，
+        // 一次失败就放弃的话卡片会一直空着（实测只能靠重开 App 才恢复），
+        // 所以这里退避重试一次，并把失败原因打进日志便于排查。
+        repeat(2) { attempt ->
+            try {
+                val bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val loaded = Glide.with(context).asBitmap().load(url).submit().get()
+                    if (blurScale > 1) fastBlur(loaded, blurScale) else loaded
+                }
+                val imgBitmap = bmp.asImageBitmap()
+                bitmap = imgBitmap
+                ImageBitmapCache.putImage(cacheKey, imgBitmap)
+                onLoaded()
+                return@LaunchedEffect
+            } catch (e: Exception) {
+                AppLog.w("MessageCard", "🖼 图片加载失败（第 ${attempt + 1}/2 次）: $url —— ${e.message}")
+                if (attempt == 0) kotlinx.coroutines.delay(2000)
             }
-            val imgBitmap = bmp.asImageBitmap()
-            bitmap = imgBitmap
-            ImageBitmapCache.putImage(cacheKey, imgBitmap)
-        } catch (e: Exception) {
-            bitmap = null
         }
+        bitmap = null
     }
 
     val bmp = bitmap
@@ -1029,7 +1148,16 @@ private fun CollapsibleMarkdownText(
         )
     }
 
-    Column(modifier = modifier) {
+    Column(
+        modifier = modifier
+            // 展开/收起时**高度要动**：展开态是 Markwon 的 AndroidView、收起态是限行数的
+            // Text —— 两个不同的 Composable 直接切换，卡片高度会一帧内跳变
+            // （和折叠块「高度一下子变短」是同一个毛病，用户也反馈了）。
+            // animateContentSize 观测布局尺寸并补间，最省事、也不挑 Compose 版本；
+            // 内容超出时会被裁掉（clip 默认 true），所以是"平滑长出来/收回去"的效果。
+            // 与 onToggleCollapse 的逐帧滚动补偿天然配合（见 MessageListScreen）。
+            .animateContentSize(animationSpec = tween(durationMillis = 200))
+    ) {
         if (isExpanded) {
             AndroidView(
                 modifier = Modifier
@@ -1229,6 +1357,43 @@ private fun ReplyQuoteStrip(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+/**
+ * 深链按钮（`extras.url`）—— 点一下直达对应页面（如 Jellyfin 的详情页）
+ *
+ * 和 WebUI 的「在 Jellyfin 中打开」是同一个东西。为什么不放图标：本项目只引入了
+ * material-icons-core（见 AttachmentChip 的说明），没有"外链/打开"这类图标，
+ * 所以用「↗」字符代替，省一个依赖。
+ *
+ * `urlGone`（服务端标记：目标已删除）⇒ **灰化 + 删除线 + 不可点**，
+ * 而不是直接隐藏 —— 历史通知该保持诚实：当时能点，现在东西没了。
+ */
+@Composable
+private fun DeepLinkChip(
+    link: MessageText.DeepLink,
+    color: Color,
+    onOpen: (String) -> Unit
+) {
+    val chipColor = if (link.gone) color.copy(alpha = color.alpha * 0.55f) else color
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(chipColor.copy(alpha = 0.12f))
+            .then(if (link.gone) Modifier else Modifier.clickable { onOpen(link.url) })
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = if (link.gone) "${link.label}（已删除）" else "${link.label} ↗",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = chipColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textDecoration = if (link.gone) TextDecoration.LineThrough else null,
+            modifier = Modifier.widthIn(max = 220.dp)
         )
     }
 }

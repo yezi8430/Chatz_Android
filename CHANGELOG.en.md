@@ -2,6 +2,40 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions match `versionName` in `app/build.gradle.kts`.
 
+## [1.7.4] — 2026-10-12
+
+**Added**
+
+- **Deep-link button** in messages: when a message carries `extras.url` (e.g. the Jellyfin
+  plugin's detail page), both the card and the notification gain an "Open" button that jumps
+  straight to the target page
+  - The Jellyfin app is launched when it can handle it (Android TV supports
+    `ACTION_VIEW` + itemId to open an item directly); otherwise the browser opens the web
+    detail page (the Jellyfin phone app has no deep-link support yet)
+  - When the target has been deleted (`extras.urlGone` is set by the server) the button is
+    greyed out, struck through and not clickable
+
+**Fixed**
+
+- Covers were missing once "cache cover images" was enabled: the cover URL is **relative**
+  (`/attachments/cached-…`) while the image pipeline only accepted `http` URLs, so relative
+  ones were dropped. They are now resolved against the server address (new
+  `utils/MessageImage`), covering cards, notifications and the home-screen widget; a failed
+  load is retried once and logged
+- Image-as-background: the card went fully black until the image loaded
+  - The background style is now applied **only once the bitmap is actually available**, with
+    the background colour, scrim and text colours fading in together (400 ms); while loading
+    or after a failure the normal card style is kept
+- Expanding/collapsing an aggregated block and "show full text" changed the height in a
+  single frame ⇒ both now animate (220 ms accordion for the "× N" block, 200 ms
+  `animateContentSize` for the body text)
+
+**Changed**
+
+- Children of an aggregated card no longer re-render a cover identical to the main card's
+  (every episode of a series shares the same poster, and a column of them made the card
+  very long); when covers differ they are still shown per child
+
 ## [1.7.3] — 2026-10-06
 
 **Fixed**

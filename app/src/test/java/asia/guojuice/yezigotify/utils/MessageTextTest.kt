@@ -59,8 +59,26 @@ class MessageTextTest {
         assertNull(MessageText.imageUrlFromExtras(mapOf<String, Any>("image" to "javascript:alert(1)")))
         assertNull(MessageText.imageUrlFromExtras(mapOf<String, Any>("image" to "file:///etc/passwd")))
         assertNull(MessageText.imageUrlFromExtras(mapOf<String, Any>("image" to "data:image/png;base64,AAA")))
-        // 相对路径也不是绝对地址，同样不加载
-        assertNull(MessageText.imageUrlFromExtras(mapOf<String, Any>("image" to "/attachments/ab.png")))
+        // 协议相对地址（//host/x.png）不是同源，照样拒 —— 它继承当前协议、其实是外站
+        assertNull(MessageText.imageUrlFromExtras(mapOf<String, Any>("image" to "//evil.com/x.png")))
+    }
+
+    @Test
+    fun imageUrlFromExtras_acceptsSameOriginRelativePath() {
+        // ⚠️ 2026-10-12 起相对路径必须放行：服务端「缓存封面图」把热链换成本地附件之后，
+        // extras.image 就是 `/attachments/cached-xxx.jpg`。这里只负责"取值"，
+        // 域名补全由 MessageImage.resolve 做（见那边的注释）。
+        // 曾经这里断言返回 null —— 结果是开了缓存之后卡片/通知的封面集体消失，别再改回去
+        assertEquals(
+            "/attachments/cached-abc.jpg",
+            MessageText.imageUrlFromExtras(mapOf<String, Any>("image" to "/attachments/cached-abc.jpg"))
+        )
+        assertEquals(
+            "/attachments/ab.png",
+            MessageText.imageUrlFromExtras(
+                mapOf<String, Any>("client::display" to mapOf("url" to "/attachments/ab.png"))
+            )
+        )
     }
 
     @Test
@@ -107,9 +125,19 @@ class MessageTextTest {
 
     @Test
     fun imageUrlFromMarkdown_rejectsNonHttp() {
-        // 服务端 WebUI 发的图是绝对地址；相对路径多半是坏数据
+        // 服务端 WebUI 发的图是绝对地址；带 `./` 这种相对写法多半是坏数据
+        // （⚠️ 但 `/attachments/…` 这种同源绝对路径是要放行的，见下一个用例）
         assertNull(MessageText.imageUrlFromMarkdown("![](./rel.png)"))
         assertNull(MessageText.imageUrlFromMarkdown("没有图片"))
+    }
+
+    @Test
+    fun imageUrlFromMarkdown_acceptsSameOriginRelativePath() {
+        // 缓存封面在正文里就是这种形态（插件开 Markdown 时正文也带一份）
+        assertEquals(
+            "/attachments/cached-x.jpg",
+            MessageText.imageUrlFromMarkdown("看图\n![](/attachments/cached-x.jpg)")
+        )
     }
 
     @Test
@@ -118,5 +146,45 @@ class MessageTextTest {
         assertEquals("https://ex.png", MessageText.imageUrl("![](https://md.png)", extras))
         // extras 里没图时才回退正文 —— 服务端 WebUI 发图正是这种情况
         assertEquals("https://md.png", MessageText.imageUrl("![](https://md.png)", null))
+    }
+
+    // ==================== 深链（extras.url / urlLabel / urlGone） ====================
+
+    @Test
+    fun deepLink_nullOrMissingUrl() {
+        assertNull(MessageText.deepLinkFromExtras(null))
+        assertNull(MessageText.deepLinkFromExtras(mapOf<String, Any>("title" to "x")))
+    }
+
+    @Test
+    fun deepLink_rejectsNonHttp() {
+        // 同图片：extras 外部可写，不能让 javascript: / file: 之类混进来
+        assertNull(MessageText.deepLinkFromExtras(mapOf<String, Any>("url" to "javascript:alert(1)")))
+        assertNull(MessageText.deepLinkFromExtras(mapOf<String, Any>("url" to "file:///etc/passwd")))
+        assertNull(MessageText.deepLinkFromExtras(mapOf<String, Any>("url" to "/attachments/x.png")))
+    }
+
+    @Test
+    fun deepLink_readsLabelAndGone() {
+        val link = MessageText.deepLinkFromExtras(
+            mapOf<String, Any>(
+                "url" to "https://jellyfin.example.com/web/#/details?id=abc",
+                "urlLabel" to "在 Jellyfin 中打开",
+                "urlGone" to true
+            )
+        )
+        assertEquals("https://jellyfin.example.com/web/#/details?id=abc", link?.url)
+        assertEquals("在 Jellyfin 中打开", link?.label)
+        assertEquals(true, link?.gone)
+    }
+
+    @Test
+    fun deepLink_labelFallsBackToHost() {
+        // label 是发送方说了算的（不翻译）；没给就用域名兜底，别显示一长串 URL
+        val link = MessageText.deepLinkFromExtras(
+            mapOf<String, Any>("url" to "https://jellyfin.example.com/web/#/details?id=abc")
+        )
+        assertEquals("jellyfin.example.com", link?.label)
+        assertEquals(false, link?.gone)
     }
 }

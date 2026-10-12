@@ -20,6 +20,8 @@ import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import asia.guojuice.yezigotify.AppDatabase
 import asia.guojuice.yezigotify.AppLog
+import asia.guojuice.yezigotify.utils.MessageImage
+import asia.guojuice.yezigotify.utils.MessageText
 import asia.guojuice.yezigotify.MessageEntity
 import asia.guojuice.yezigotify.R
 import com.bumptech.glide.Glide
@@ -110,7 +112,7 @@ class MessageWidgetFactory(
             if (!imageBgEnabled) return
 
             val urls = messages
-                .mapNotNull { extractImageUrl(it.message) }
+                .mapNotNull { m -> MessageImage.resolve(context, m.serverId, extractImageUrl(m.message)) }
                 .distinct()
 
             if (urls.isEmpty()) return
@@ -233,7 +235,9 @@ class MessageWidgetFactory(
         rv.setOnClickFillInIntent(R.id.widget_item_root, fillInIntent)
 
         val imageBgEnabled = prefs.getBoolean("image_as_background", false)
-        val imageUrl = extractImageUrl(msg.message)
+        // ⚠️ 相对路径（缓存封面 `/attachments/cached-…`）要按这条消息所属服务器补全域名 ——
+        //    预读（onDataSetChanged）和这里用的是同一个函数，两边必须一致，否则缓存键对不上
+        val imageUrl = MessageImage.resolve(context, msg.serverId, extractImageUrl(msg.message))
 
         if (imageBgEnabled && imageUrl != null) {
             // 直接从预读缓存取，不做任何 IO
@@ -345,16 +349,12 @@ class MessageWidgetFactory(
     }
 
     /**
-     * 从 markdown 语法中提取图片 URL
+     * 从正文里取图片地址
      *
-     *  正则有捕获组 ()，且用 getOrNull(1) 避免越界
+     * 规则统一在 [MessageText.imageUrlFromMarkdown]：http(s) 绝对地址，或**同源相对路径**
+     * （「缓存封面图」抓下来的 `/attachments/cached-xxx.jpg`）。
+     * 相对路径的域名补全由调用方过 [MessageImage.resolve] —— 这里只管取值。
      */
-    private fun extractImageUrl(text: String): String? {
-        return try {
-            val regex = Regex("!\\[.*?\\]\\((https?://.*?)\\)")
-            regex.find(text)?.groupValues?.getOrNull(1)
-        } catch (_: Exception) {
-            null
-        }
-    }
+    private fun extractImageUrl(text: String): String? =
+        MessageText.imageUrlFromMarkdown(text)
 }
