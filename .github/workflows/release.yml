@@ -23,14 +23,19 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: 装 Android SDK
-        uses: android-actions/setup-android@v3
+      # 注意：不要装 android-actions/setup-android 那一步 ——
+      # GitHub 托管的 ubuntu runner 自带 Android SDK（ANDROID_HOME 已设好、许可已接受）；
+      # 原来写的 `packages: tools platform-tools` 里的「tools」老包已被 Google 下架，
+      # sdkmanager 找不到就直接报错退出（v1.7.2 / v1.7.4 两次失败都挂在这）。
 
       - name: Gradle 缓存
         uses: gradle/actions/setup-gradle@v4
 
       - name: 构建 release（未签名）
-        run: ./gradlew assembleRelease
+        run: |
+          # 仓库里 gradlew 是 100644（Windows 提交不带执行位），Linux 上直接跑会 Permission denied
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
       - name: 对齐 + 签名 + 校验
         env:
@@ -45,6 +50,7 @@ jobs:
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           echo "找到产物: $APK"
 
+          VERSION="${GITHUB_REF_NAME#v}"
           TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
           "$TOOLS/zipalign" -v -p 4 "$APK" "$RUNNER_TEMP/aligned.apk"
           "$TOOLS/apksigner" sign \
@@ -52,9 +58,9 @@ jobs:
             --ks-key-alias "$KEY_ALIAS" \
             --ks-pass pass:"$KEYSTORE_PASSWORD" \
             --key-pass pass:"$KEY_PASSWORD" \
-            --out "$RUNNER_TEMP/Chatz-${GITHUB_REF_NAME}.apk" \
+            --out "$RUNNER_TEMP/Chatz-${VERSION}.apk" \
             "$RUNNER_TEMP/aligned.apk"
-          "$TOOLS/apksigner" verify --print-certs "$RUNNER_TEMP/Chatz-${GITHUB_REF_NAME}.apk"
+          "$TOOLS/apksigner" verify --print-certs "$RUNNER_TEMP/Chatz-${VERSION}.apk"
 
           # 清掉临时密钥，别留在 runner 上
           rm -f "$RUNNER_TEMP/upload.jks"
@@ -62,7 +68,7 @@ jobs:
       - name: 发 Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ runner.temp }}/Chatz-${{ github.ref_name }}.apk
+          files: ${{ runner.temp }}/Chatz-*.apk
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
