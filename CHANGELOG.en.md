@@ -2,6 +2,22 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions match `versionName` in `app/build.gradle.kts`.
 
+## [Unreleased]
+
+**Added**
+
+- **Daily digest**: once a day the server summarises the last 24 hours of unread messages into
+  one message, delivered into a **private channel only you can see** (message visibility is per
+  channel subscription, so a shared channel would expose your unread list to everyone)
+  - Once enabled, a "Today's digest" entry with an unread badge appears at the top of the channel
+    list in the drawer; **disabling the switch hides it** — the container channel and its history
+    stay on the server and come back if you re-enable
+  - Digest notifications **bypass local mute** (channel mute and per-app / per-channel DND do not
+    block them) — a digest exists to be read later, so muting it defeats the purpose.
+    ⚠️ An app cannot break through **OS-level** Do Not Disturb
+  - Older servers have no `/user/digest` ⇒ treated as "not enabled", no entry is shown,
+    exactly the behaviour before this update
+
 ## [1.7.5] — 2026-10-12
 
 **Fixed**
@@ -16,6 +32,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   All bitmaps are now `copy()`d before they are cached, cutting the link to the BitmapPool
   (channel/app icons and message covers in `ui/message`, drawer icons in `ui/drawer`,
   image preview in `ui/preview`).
+
+**Changed**
+
+- **Icons are no longer force-cropped to a circle**: channel / app icons keep their own aspect
+  ratio (6dp rounded corners + `ContentScale.Fit`) instead of losing their corners.
+  The default letter avatar stays circular (there is nothing to crop there)
 
 ## [1.7.4] — 2026-10-12
 

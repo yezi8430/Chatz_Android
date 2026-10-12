@@ -96,6 +96,7 @@ import asia.guojuice.yezigotify.OutgoingMessage
 import asia.guojuice.yezigotify.UploadedAttachment
 import asia.guojuice.yezigotify.capabilities.ChannelSubscribeResult
 import asia.guojuice.yezigotify.capabilities.ChatzChannel
+import asia.guojuice.yezigotify.capabilities.ChatzDigestState
 import asia.guojuice.yezigotify.config.ServerConfigStore
 import asia.guojuice.yezigotify.db.LocalIds
 import asia.guojuice.yezigotify.ui.channel.ChannelDiscoverDialog
@@ -129,6 +130,8 @@ fun MainScreen(
     drawerServerText: String,
     drawerServers: List<DrawerServer>,
     drawerChannels: List<ChatzChannel>,
+    /** 每台服务器的「每日摘要」状态（serverId → 状态）；没有 / 老服务端则不在 map 里 */
+    drawerDigest: Map<String, ChatzDigestState> = emptyMap(),
     drawerAnyChatz: Boolean,
     drawerCurrentChannelId: Int?,
     currentFilterAppId: Int,
@@ -179,8 +182,15 @@ fun MainScreen(
     // 把（非响应式的）服务器核心信息与（响应式的）频道 / 计数合并成抽屉分组
     val servers = drawerServers.map { s ->
         val serverChannels = drawerChannels.filter { it.sourceServerId == s.serverId }
+        // 摘要容器：按服务端给的**远程**频道 id 在本地频道里找（本地 id 带 slot，
+        // 直接用远程 id 比对不上）。开着才给入口，关着连容器一起藏。
+        val digest = drawerDigest[s.serverId]
+        val digestChannel = digest?.channelId
+            ?.let { remote -> serverChannels.firstOrNull { it.remoteId == remote } }
         s.copy(
             channels = serverChannels,
+            digestChannel = digestChannel,
+            digestEnabled = digest?.enabled == true && digestChannel != null,
             totalCount = drawerCounts.byServer[s.serverId] ?: s.totalCount,
             // 有未读 → 分组头的消息数用淡红字提示（与频道徽标的淡红提示同一套语义）
             hasUnread = serverChannels.any { it.id in drawerCounts.channelsWithUnread }

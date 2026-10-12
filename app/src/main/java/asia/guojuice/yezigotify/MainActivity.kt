@@ -243,6 +243,9 @@ class MainActivity : AppCompatActivity() {
                 val channelsRaw by viewModel.channelsFlow.collectAsState(
                     initial = emptyList()
                 )
+                val digestRaw by viewModel.digestStateFlow.collectAsState(
+                    initial = emptyMap()
+                )
 
                 MainScreen(
                     // 顶栏
@@ -256,6 +259,7 @@ class MainActivity : AppCompatActivity() {
                     drawerServerText = drawerServerTextState.value,
                     drawerServers = drawerServersState.value,
                     drawerChannels = channelsRaw,
+                    drawerDigest = digestRaw,
                     drawerAnyChatz = drawerAnyChatzState.value,
                     drawerCurrentChannelId = currentChannelIdState.value,
                     currentFilterAppId = filterAppIdState.value,

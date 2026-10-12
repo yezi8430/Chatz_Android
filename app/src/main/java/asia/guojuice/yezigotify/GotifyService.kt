@@ -771,7 +771,27 @@ class GotifyService : Service() {
      * 查不到频道就按未静音处理：本地还没有该频道记录时（首次同步未跑完），
      * 宁可多弹一次，也不要因为查不到就把通知静默吞掉。
      */
+    /**
+     * 是不是「每日摘要」消息（服务端 digest.js 打 extras.digest = true）
+     *
+     * 摘要的意义就是「补看不想被实时打扰的消息」，所以它要能穿透本地勿扰：
+     *   · 频道静音 → 不吞（见 suppressedByChannelMute）
+     *   · 勿扰时段 → 不静音（见 showNotification）
+     *   · 优先级由用户在服务端配（默认 8）⇒ 落到 IMPORTANCE_HIGH 的
+     *     "high" 渠道，有机会穿透 Android 的「仅优先级」系统勿扰
+     *
+     * ⚠️ 系统级勿扰普通 App 无权绕过，只能靠高重要性渠道 + 用户在系统设置里
+     *    放行。这一点在服务端设置页和文档里都写清楚了，别说成"一定能穿透"。
+     */
+    private fun isDigestMessage(msg: GotifyMessage): Boolean {
+        val v = msg.extrasMap?.get("digest") ?: return false
+        return v == true || v == "true" || v == 1 || v == 1.0
+    }
+
     private suspend fun suppressedByChannelMute(db: AppDatabase, msg: GotifyMessage): Boolean {
+        // 每日摘要绕过静音（它是"补看"用的，被静音就失去意义了）
+        if (isDigestMessage(msg)) return false
+
         val cid = msg.channelId ?: return false
 
         val muted = try {
@@ -799,7 +819,9 @@ class GotifyService : Service() {
         val exempt = hasConfig &&
                 config.isPriorityExempt(msg.priority, globalMin, globalMax)
 
-        val localSilent = if (exempt) {
+        // 每日摘要：本地勿扰的"静音"一律不生效（见 isDigestMessage 的说明）。
+        // 注意只绕**静音**，不绕"根本不弹"—— 那条在 suppressedByChannelMute 里已经放过了。
+        val localSilent = if (exempt || isDigestMessage(msg)) {
             false
         } else {
             val appSilent = hasConfig && config.shouldBeSilent()

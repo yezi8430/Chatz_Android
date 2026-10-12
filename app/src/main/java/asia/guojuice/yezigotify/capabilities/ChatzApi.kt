@@ -163,6 +163,18 @@ interface ChatzApiService {
     @GET("auth/me")
     suspend fun getMe(): ChatzMe
 
+    /**
+     * 每日摘要状态（这台服务器上，这个账号的）
+     *
+     * 用来判断抽屉里「今日摘要」入口的显隐：**开了才显示，关了就不显示**
+     * （频道和历史仍留在服务端，重开又能看到）。
+     *
+     * 为什么不复用 /user/settings：客户端本来就不读那份（偏好全在本地），
+     * 为这一个字段拉整份不值当；channelId 也顺带在这里返回，不用自己去翻频道列表。
+     */
+    @GET("user/digest")
+    suspend fun getDigestState(): ChatzDigestState
+
     /** 改昵称（服务端限制 1~32 字符） */
     @PATCH("user/profile")
     suspend fun updateProfile(@Body body: ChatzProfileBody): Response<ChatzProfileResult>
@@ -645,6 +657,19 @@ class ChatzApi(
         service.getMe()
     } catch (e: Exception) {
         AppLog.e(TAG, "getMe failed: ${e.message}")
+        null
+    }
+
+    /**
+     * 当前账号的「每日摘要」状态；失败返回 null
+     *
+     * ⚠️ 老服务端没有 /user/digest，会 404 → Retrofit 抛异常 → 这里返回 null。
+     * 调用方把 null 当「没开摘要」处理（不显示入口），行为与升级前一致。
+     */
+    suspend fun getDigestState(): ChatzDigestState? = try {
+        service.getDigestState()
+    } catch (e: Exception) {
+        AppLog.d(TAG, "getDigestState 不可用（老服务端？）: ${e.message}")
         null
     }
 

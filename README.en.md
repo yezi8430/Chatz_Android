@@ -39,6 +39,12 @@ Chatz ships as three independent repositories. **The server is required**; the c
 - Discover, subscribe, unsubscribe
 - Channel password and channel icon
 - Per-channel do-not-disturb
+- **Daily digest**: the server summarises the last 24 hours of unread messages into one message,
+  delivered into a **private channel only you can see**. Once enabled, a "Today's digest" entry
+  appears at the top of the channel list in the drawer; disabling the switch hides it again
+  (the history is kept and reappears if you re-enable).
+  Digest notifications **bypass local mute** — a digest exists to be read later, so muting it
+  defeats the purpose
 
 **Messages**
 

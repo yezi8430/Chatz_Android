@@ -19,6 +19,7 @@ import androidx.paging.cachedIn
 import androidx.paging.map
 import asia.guojuice.yezigotify.capabilities.ChatzApi
 import asia.guojuice.yezigotify.capabilities.ChatzChannel
+import asia.guojuice.yezigotify.capabilities.ChatzDigestState
 import asia.guojuice.yezigotify.capabilities.ChatzMe
 import asia.guojuice.yezigotify.capabilities.ChatzSendBody
 import asia.guojuice.yezigotify.capabilities.ChatzSendResult
@@ -475,6 +476,24 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+
+    /**
+     * 每台 Chatz 服务器的「每日摘要」状态（serverId → 状态）
+     *
+     * 抽屉据此决定「今日摘要」入口的显隐，以及把容器频道从普通频道列表里剔除：
+     *   - 没开（enabled = false）→ 不显示入口
+     *   - 开了 → 显示入口；容器频道不进普通频道列表（它只有本人订阅，是系统容器，
+     *     不该和用户自建频道混在一起）
+     *
+     * ⚠️ [ChatzDigestState.channelId] 是**远程**频道 id：容器频道同样会经
+     *    syncChannels 进本地库，本地 id 由 MainScreen 用 remoteId 现算，
+     *    这里不存本地 id —— slot 变了本地 id 就对不上。
+     *
+     * ⚠️ 老服务端没有 /user/digest → 这台服务器永远不在 map 里 → 不显示入口，
+     *    行为与升级前完全一致。
+     */
+    private val _digestStateFlow = MutableStateFlow<Map<String, ChatzDigestState>>(emptyMap())
+    val digestStateFlow: StateFlow<Map<String, ChatzDigestState>> = _digestStateFlow.asStateFlow()
 
     // ==================== 筛选 ====================
 
@@ -1060,7 +1079,26 @@ class MessageViewModel(application: Application) : AndroidViewModel(application)
 
         syncUnreadCounts(api, server)
 
+        // 摘要状态放最后：它只是 UI 显隐依据，失败也不该影响消息同步的结果
+        syncDigestState(api, server)
+
         return newCount
+    }
+
+    /**
+     * 拉「每日摘要」状态
+     *
+     * 失败（老服务端 404 / 网络）时**保留上一次的值**：摘要入口的显隐不该因为
+     * 一次请求抖动就闪没，下一次同步自然会纠正。
+     */
+    private suspend fun syncDigestState(api: ChatzApi, server: ServerConfig) {
+        val state = api.getDigestState() ?: return
+        _digestStateFlow.value = _digestStateFlow.value + (server.id to state)
+        AppLog.d(
+            TAG,
+            "🗓️ [Chatz] 摘要状态：enabled=${state.enabled} time=${state.time} " +
+                    "channelId=${state.channelId}"
+        )
     }
 
     /**

@@ -20,6 +20,14 @@ data class ChatzChannel(
     @SerializedName("muted") val muted: Boolean = false,
     /** 是否设了订阅密码（服务端只回「有没有」，绝不回密码本身） */
     @SerializedName("passwordProtected") val passwordProtected: Boolean = false,
+    /**
+     * 是不是这个用户的「每日摘要」容器频道（服务端 user_digest_channels）
+     *
+     * 抽屉里不按普通频道列它 —— 改在设置页显示「今日摘要」入口 + 角标，
+     * 免得每个人的频道列表里都多一个系统频道。
+     * 老服务端不下发这个字段 ⇒ 默认 false，行为与以前一致。
+     */
+    @SerializedName("isDigest") val isDigest: Boolean = false,
 
     // ===== 多服务器来源（本地字段，不来自服务端 JSON） =====
     /** 来源服务器 id。⚠️ 与 GotifyMessage.serverId 同理：Gson 反序列化时缺字段会是
@@ -39,6 +47,23 @@ data class ChatzChannel(
 data class ChatzUnreadCounts(
     @SerializedName("total") val total: Int = 0,
     @SerializedName("byChannel") val byChannel: Map<String, Int> = emptyMap()
+)
+
+/**
+ * GET /user/digest 响应（当前账号的「每日摘要」状态）
+ *
+ * 老服务端没有这个接口 ⇒ 客户端拿到 404 / 网络错误时**一律按「未开启」处理**，
+ * 不显示「今日摘要」入口，行为与以前完全一致。
+ *
+ * [channelId] 是「懒创建」的结果：没开过摘要时它是 null，
+ * 用户在设置里打开开关后服务端才建容器频道，这里才会拿到 id。
+ */
+data class ChatzDigestState(
+    @SerializedName("enabled") val enabled: Boolean = false,
+    /** 本地时间 `HH:mm`（服务端按它自己的时区算，不下发时区） */
+    @SerializedName("time") val time: String? = null,
+    @SerializedName("priority") val priority: Int = 8,
+    @SerializedName("channelId") val channelId: Int? = null
 )
 
 /**

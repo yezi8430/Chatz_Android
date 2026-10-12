@@ -104,6 +104,16 @@ data class DrawerServer(
     val channels: List<ChatzChannel>,
     val ntfyTopic: String?,
     val totalCount: Int,
+    /**
+     * 「每日摘要」容器频道（服务端 isDigest=true 的那个）
+     *
+     * ⚠️ 它**永远不进普通频道列表**（是系统容器，只有本人订阅），
+     *    是否显示「今日摘要」入口另看 [digestEnabled]。
+     * null = 这台没有（非 Chatz / 老服务端 / 还没建容器）。
+     */
+    val digestChannel: ChatzChannel? = null,
+    /** 摘要开关：关着就只把容器频道藏起来，不显示入口（用户要求「关了就隐藏」） */
+    val digestEnabled: Boolean = false,
     /** 该分组是否展开（收起时只显示分组头）。状态由 MainActivity 持有并持久化 */
     val expanded: Boolean = true,
     /**
@@ -265,12 +275,34 @@ fun DrawerContent(
                                     )
                                 }
                             } else {
-                                if (server.channels.isNotEmpty()) {
+                                // 「每日摘要」容器频道不按普通频道列 —— 它只有本人订阅，
+                                // 是系统容器，混在自建频道里很怪。开了开关才单独给一个入口。
+                                val digestEntry = if (server.digestEnabled) server.digestChannel else null
+                                val visibleChannels = server.channels.filter {
+                                    it.id != server.digestChannel?.id
+                                }
+                                if (visibleChannels.isNotEmpty() || digestEntry != null) {
                                     item(key = "channels_header_${server.serverId}") {
                                         DrawerSectionHeader("频道")
                                     }
+                                    if (digestEntry != null) {
+                                        item(key = "digest_${server.serverId}") {
+                                            DrawerItem(
+                                                text = "今日摘要",
+                                                iconUrl = null,
+                                                fallbackIconRes = null,
+                                                selected = currentChannelId == digestEntry.id,
+                                                onClick = { onSelectChannel(digestEntry.id) },
+                                                count = drawerCounts.byChannel[digestEntry.id] ?: 0,
+                                                highlightCount = drawerCounts.channelsWithUnread
+                                                    .contains(digestEntry.id),
+                                                // 不给长按：那是系统容器，改名 / 删除都不合适
+                                                iconContent = { DrawerLetterAvatar("今") }
+                                            )
+                                        }
+                                    }
                                     itemsIndexed(
-                                        items = server.channels,
+                                        items = visibleChannels,
                                         key = { _, ch -> "channel_${server.serverId}_${ch.id}" }
                                     ) { _, ch ->
                                         DrawerItem(
