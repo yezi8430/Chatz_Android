@@ -2,21 +2,24 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions match `versionName` in `app/build.gradle.kts`.
 
-## [Unreleased]
+## [1.7.6] — 2026-10-13
 
 **Added**
 
-- **Daily digest**: once a day the server summarises the last 24 hours of unread messages into
-  one message, delivered into a **private channel only you can see** (message visibility is per
-  channel subscription, so a shared channel would expose your unread list to everyone)
-  - Once enabled, a "Today's digest" entry with an unread badge appears at the top of the channel
-    list in the drawer; **disabling the switch hides it** — the container channel and its history
-    stay on the server and come back if you re-enable
-  - Digest notifications **bypass local mute** (channel mute and per-app / per-channel DND do not
-    block them) — a digest exists to be read later, so muting it defeats the purpose.
-    ⚠️ An app cannot break through **OS-level** Do Not Disturb
-  - Older servers have no `/user/digest` ⇒ treated as "not enabled", no entry is shown,
-    exactly the behaviour before this update
+- **Daily digest** (needs server **1.3.9+**; older servers are unaffected)
+  - Once a day at the time you set, the server summarises the last 24 hours of
+    messages into a single message. Its title carries the date, in the **time zone
+    you picked on the server** — not your phone's
+  - A **"Today's digest"** entry appears at the top of the Channels section in the
+    drawer: shown when the digest is on, hidden when off. The container channel
+    itself stays out of your channel list (it is a system channel only you subscribe to)
+  - Digest messages **ignore the local do-not-disturb "silent" rule** — a digest
+    exists to be read later, so muting it defeats the purpose
+  - Servers without `/user/digest` are treated as "off": behaviour is exactly as before
+
+**Notes**
+- The digest switch, time, time zone and priority are all configured in the server's
+  web UI; the app only reads the state
 
 ## [1.7.5] — 2026-10-12
 
@@ -38,7 +41,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - **Icons are no longer force-cropped to a circle**: channel / app icons keep their own aspect
   ratio (6dp rounded corners + `ContentScale.Fit`) instead of losing their corners.
   The default letter avatar stays circular (there is nothing to crop there)
-
 ## [1.7.4] — 2026-10-12
 
 **Added**

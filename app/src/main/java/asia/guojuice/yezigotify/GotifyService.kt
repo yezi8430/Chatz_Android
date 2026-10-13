@@ -784,7 +784,11 @@ class GotifyService : Service() {
      *    放行。这一点在服务端设置页和文档里都写清楚了，别说成"一定能穿透"。
      */
     private fun isDigestMessage(msg: GotifyMessage): Boolean {
-        val v = msg.extrasMap?.get("digest") ?: return false
+        // ⚠️ 是 msg.extras，不是 extrasMap ——
+        //    extrasMap 只是 toGotifyMessage() 里的**局部变量**（Entity → 内存模型时
+        //    把 extras 的 JSON 串解成 Map），GotifyMessage 本身没有这个成员
+        val v = msg.extras?.get("digest") ?: return false
+        // Gson 把 JSON 数字统一解成 Double，所以 1 和 1.0 都要认
         return v == true || v == "true" || v == 1 || v == 1.0
     }
 
