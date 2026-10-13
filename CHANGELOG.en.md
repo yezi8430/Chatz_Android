@@ -2,6 +2,15 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions match `versionName` in `app/build.gradle.kts`.
 
+## [1.7.7] — 2026-10-13
+
+**Improved**
+
+- **"Show all / Collapse" now looks like a button**: it used to be a plain line of text
+  styled like the body copy, so it was not obvious it was tappable. It is now a small
+  **rounded chip with a tinted background**, matching the tag chips, and the tap target
+  is larger too
+
 ## [1.7.6] — 2026-10-13
 
 **Added**

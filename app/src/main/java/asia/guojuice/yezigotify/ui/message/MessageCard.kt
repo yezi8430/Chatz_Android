@@ -1225,13 +1225,14 @@ private fun CollapsibleMarkdownText(
         }
 
         if (isOverflowing || isExpanded) {
-            Text(
-                text = if (isExpanded) "收起" else "展开全文",
-                color = textColor,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
+            // 做成和标签 chip 一样的样子（圆角 + 淡底）：
+            //   以前是一行纯文字，字号颜色都跟正文差不多，用户看不出它能点。
+            //   现在整块带底色 + 圆角，点击区域也跟着变大（横竖各多几 dp）。
+            Box(
                 modifier = Modifier
-                    .padding(top = 6.dp)
+                    .padding(top = 8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(textColor.copy(alpha = 0.15f))
                     .clickable {
                         val wasExpanded = isExpanded
                         isExpanded = !isExpanded
@@ -1239,7 +1240,15 @@ private fun CollapsibleMarkdownText(
                             onToggleCollapse()
                         }
                     }
-            )
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = if (isExpanded) "收起" else "展开全文",
+                    color = textColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
